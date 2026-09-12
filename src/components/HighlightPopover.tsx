@@ -55,6 +55,7 @@ export const HighlightPopover: React.FC<HighlightPopoverProps> = ({
 
   return (
     <div
+      onMouseDown={(e) => e.preventDefault()}
       style={{
         left: `${Math.max(10, Math.min(position.x - 140, window.innerWidth - 320))}px`,
         top: `${Math.max(10, position.y - 10)}px`,

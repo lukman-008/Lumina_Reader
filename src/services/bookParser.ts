@@ -2,11 +2,11 @@ import type { Book, BookChapter } from '../types';
 import { db } from './db';
 import { SAMPLE_BOOKS } from './sampleBooks';
 
-import * as pdfjsLib from 'pdfjs-dist';
-import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
+
 import JSZip from 'jszip';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
+
 
 export async function initializeDatabaseWithSeed(): Promise<Book[]> {
   try {
@@ -66,117 +66,15 @@ export async function parseUploadedBook(file: File): Promise<Book> {
   }
 
   if (extension === 'pdf') {
-    let extractedText = '';
-    try {
-      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
-      const pdf = await loadingTask.promise;
-      const numPages = pdf.numPages;
-
-      for (let i = 1; i <= numPages; i++) {
-        const page = await pdf.getPage(i);
-        
-        // 1. Extract text
-        const content = await page.getTextContent();
-        let pageText = '';
-        let lastY = -1;
-        
-        // Sort items vertically (top to bottom) then horizontally (left to right)
-        // PDF coordinate system: origin (0,0) is bottom-left, so higher Y is higher on page.
-        const items = content.items.sort((a: any, b: any) => {
-          if (!a.transform || !b.transform) return 0;
-          if (Math.abs(b.transform[5] - a.transform[5]) > 5) {
-            return b.transform[5] - a.transform[5];
-          }
-          return a.transform[4] - b.transform[4];
-        });
-
-        for (const itemAny of items) {
-          const item = itemAny as any;
-          if (!item.str || !item.transform) continue;
-          
-          const y = item.transform[5];
-          if (lastY !== -1 && Math.abs(lastY - y) > 12) {
-             pageText += '\n';
-          } else if (lastY !== -1 && Math.abs(lastY - y) <= 12) {
-             pageText += ' ';
-          }
-          pageText += item.str;
-          lastY = y;
-        }
-        
-        extractedText += pageText + '\n\n';
-
-        // 2. Extract XObject Images
-        try {
-          const opList = await page.getOperatorList();
-          for (let j = 0; j < opList.fnArray.length; j++) {
-            if (opList.fnArray[j] === pdfjsLib.OPS.paintImageXObject) {
-              const imgName = opList.argsArray[j][0];
-              const img = await page.objs.get(imgName) as any;
-              
-              if (img && img.width && img.height && img.data) {
-                // Ensure image isn't a tiny icon or massive background to save memory
-                if (img.width < 50 || img.height < 50) continue;
-                
-                const canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                  const imgData = ctx.createImageData(img.width, img.height);
-                  const len = img.data.length;
-                  const pixels = img.width * img.height;
-                  
-                  if (len === pixels * 4) { // RGBA
-                    imgData.data.set(img.data);
-                  } else if (len === pixels * 3) { // RGB
-                    for(let k = 0, l = 0; k < len; k += 3, l += 4) {
-                      imgData.data[l] = img.data[k];
-                      imgData.data[l+1] = img.data[k+1];
-                      imgData.data[l+2] = img.data[k+2];
-                      imgData.data[l+3] = 255;
-                    }
-                  } else if (img.kind === 1 || len === pixels) { // Grayscale
-                    for(let k = 0, l = 0; k < len; k++, l += 4) {
-                      imgData.data[l] = imgData.data[l+1] = imgData.data[l+2] = img.data[k];
-                      imgData.data[l+3] = 255;
-                    }
-                  }
-                  ctx.putImageData(imgData, 0, 0);
-                  const dataUri = canvas.toDataURL('image/jpeg', 0.85);
-                  extractedText += `\n\n![Extracted PDF Image](${dataUri})\n\n`;
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('PDF Image extraction skipped for page', i, e);
-        }
-      }
-    } catch (err) {
-      console.error('PDF parsing error:', err);
-      extractedText = `[Document: ${file.name}]\n\nThis PDF document could not be parsed correctly or contains no readable text.`;
-    }
-
-    // Cleanup excessive whitespace while preserving paragraphs
-    extractedText = extractedText.replace(/ {2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
-
-    if (extractedText.length < 50) {
-      extractedText = `[Document: ${file.name}]\n\nThis PDF document might contain scanned images instead of text, or could not be parsed correctly.`;
-    }
-
-    const chapters = splitIntoChapters(extractedText, title);
-    const totalWords = countWords(extractedText);
-
     return {
       id: 'book-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
       title,
       author: 'PDF Document',
       description: `Imported PDF: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`,
       format: 'pdf',
-      totalWords: Math.max(totalWords, 1200),
+      totalWords: 1200,
       coverGradient: randomGradient,
-      chapters,
+      chapters: [{ id: 'pdf-chapter', title: 'Document', content: 'Native PDF Document', wordCount: 1200 }],
       category: 'PDF Documents',
       rawFile: arrayBuffer,
       addedAt: Date.now(),
