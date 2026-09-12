@@ -581,7 +581,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       ref={containerRef}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
-      className={`min-h-screen w-full flex flex-col transition-colors duration-200 relative ${themeStyle.bg} ${themeStyle.text}`}
+      className={`${
+        isZenMode ? 'h-screen' : 'h-[calc(100vh-2.75rem)]'
+      } w-full flex flex-col transition-colors duration-200 relative overflow-hidden ${themeStyle.bg} ${themeStyle.text}`}
     >
       {/* Circadian Blue Light Warmth Overlay */}
       {effectiveWarmth > 0 && (

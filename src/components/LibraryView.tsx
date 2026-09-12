@@ -252,7 +252,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const totalReadingHours = (totalWords / (220 * 60)).toFixed(1);
 
   return (
-    <div className="min-h-[calc(100vh-2.75rem)] bg-slate-950 text-slate-100 p-6 sm:p-8 max-w-7xl mx-auto flex flex-col space-y-8 animate-in fade-in duration-200">
+    <div className="min-h-[calc(100vh-2.75rem)] bg-slate-950 text-slate-100 p-6 sm:p-8 pb-28 sm:pb-36 max-w-7xl mx-auto flex flex-col space-y-8 animate-in fade-in duration-200">
       {/* Top Banner / Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Books Volume */}
@@ -723,6 +723,36 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             );
           })}
         </div>
+      )}
+
+      {/* Bottom Library Summary & Navigation Controls */}
+      {filteredBooks.length > 0 && (
+        <footer className="pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+          <div className="flex items-center gap-2">
+            <HardDrive className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span>
+              Showing {filteredBooks.length} of {books.length} {books.length === 1 ? 'title' : 'titles'} · 100% offline Dexie database
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="hover:text-amber-400 transition flex items-center gap-1 cursor-pointer"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Import Book</span>
+            </button>
+            <span className="text-slate-700">•</span>
+            <button
+              onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+              className="hover:text-slate-200 transition cursor-pointer flex items-center gap-1"
+            >
+              <span>Back to Top</span>
+              <span>↑</span>
+            </button>
+          </div>
+        </footer>
       )}
 
       {/* Modal: Create New Shelf */}

@@ -56,7 +56,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
   if (isZenMode) return null;
 
   return (
-    <header className="h-11 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-3 flex items-center justify-between select-none z-30 shrink-0">
+    <header className="h-11 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-3 flex items-center justify-between select-none z-30 shrink-0 sticky top-0">
       {/* Left: Window identity & App branding */}
       <div className="flex items-center gap-3">
         {/* Native Mac style traffic dots aesthetic when on desktop */}
