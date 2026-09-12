@@ -1,0 +1,141 @@
+export type ReadingTheme = 'paper' | 'sepia' | 'dusk' | 'amoled' | 'eink';
+
+export type FontFamilyChoice = 'literata' | 'merriweather' | 'sans' | 'dyslexic' | 'mono';
+
+export type LayoutMode = 'double' | 'single' | 'scroll';
+
+export type TextAlignment = 'justify' | 'left';
+
+export type SoundscapeType = 'none' | 'rain' | 'fireplace' | 'cafe' | 'brown-noise' | 'waves' | 'crickets';
+
+export interface BookChapter {
+  id: string;
+  title: string;
+  content: string; // Plain text or HTML/Markdown content
+  wordCount: number;
+}
+
+export interface Highlight {
+  id: string;
+  bookId: string;
+  chapterIndex: number;
+  selectedText: string;
+  color: 'yellow' | 'emerald' | 'sky' | 'rose' | 'amber';
+  note?: string;
+  createdAt: number;
+}
+
+export interface Bookmark {
+  id: string;
+  bookId: string;
+  chapterIndex: number;
+  pageIndex: number;
+  label: string;
+  snippet: string;
+  createdAt: number;
+}
+
+export interface Shelf {
+  id: string;
+  name: string;
+  color?: string;
+  createdAt: number;
+}
+
+export interface Book {
+  id: string;
+  title: string;
+  author: string;
+  description: string;
+  coverGradient?: string;
+  coverImage?: string; // base64 or object URL
+  format: 'epub' | 'pdf' | 'txt' | 'md';
+  totalWords: number;
+  chapters: BookChapter[];
+  readingProgress: {
+    currentChapterIndex: number;
+    currentPageIndex: number;
+    percentage: number;
+    lastReadTimestamp: number;
+  };
+  category: string;
+  addedAt: number;
+  isFavorite?: boolean;
+  shelfId?: string;
+  tags?: string[];
+}
+
+export interface ReaderSettings {
+  theme: ReadingTheme;
+  fontFamily: FontFamilyChoice;
+  fontSize: number; // in px, e.g. 18
+  lineHeight: number; // e.g. 1.7
+  letterSpacing: number; // in px, e.g. 0
+  marginWidth: number; // in px or rem, e.g. 32
+  layoutMode: LayoutMode;
+  textAlign: TextAlignment;
+  bionicReading: boolean;
+  twoColumnThreshold: number;
+  // Ambient Sound & Warmth Lighting
+  soundscape: SoundscapeType;
+  soundscapeVolume: number; // 0 to 1
+  warmth: number; // 0 to 100 (blue light filter temperature)
+  autoCircadian: boolean;
+  // Reading Ruler (Focus Guide)
+  readingRuler: boolean;
+  readingRulerHeight: number; // 24 to 80 px
+  readingRulerOpacity: number; // 0.1 to 0.4
+  // Auto-Pacing
+  autoPagingWpm: number; // 150 to 500
+}
+
+export interface ReadingSession {
+  id: string;
+  bookId: string;
+  bookTitle: string;
+  startTime: number;
+  endTime: number;
+  durationMinutes: number;
+  wordsRead: number;
+  pagesRead: number;
+  date: string; // YYYY-MM-DD
+}
+
+export interface DailyReadingLog {
+  date: string; // YYYY-MM-DD
+  minutesRead: number;
+  wordsRead: number;
+  sessionsCount: number;
+}
+
+export interface HabitStats {
+  currentStreak: number;
+  longestStreak: number;
+  todayMinutes: number;
+  todayGoalMinutes: number;
+  totalMinutes: number;
+  totalWordsRead: number;
+  averageWpm: number;
+  heatMapData: { date: string; minutes: number; level: 0 | 1 | 2 | 3 | 4 }[];
+}
+
+export interface LuminaBackup {
+  version: number;
+  exportedAt: string;
+  books: Book[];
+  highlights: Highlight[];
+  bookmarks: Bookmark[];
+  shelves: Shelf[];
+  readingSessions: ReadingSession[];
+  settings: ReaderSettings;
+}
+
+export interface ReadingSessionStats {
+  id: string;
+  bookId: string;
+  durationMinutes: number;
+  pagesRead: number;
+  date: string;
+}
+
+export type OSPlatform = 'windows' | 'macos' | 'linux' | 'other';

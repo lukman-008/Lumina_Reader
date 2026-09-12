@@ -1,0 +1,6 @@
+{
+  "name": "Lumina Reader",
+  "description": "Cross-platform offline desktop book reading software for Windows, macOS, and Linux with custom typography, annotations, offline speech, and AI reading companion.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

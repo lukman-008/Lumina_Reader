@@ -1,0 +1,51 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .font-literata {
+    font-family: 'Literata', Georgia, serif;
+  }
+  .font-merriweather {
+    font-family: 'Merriweather', Georgia, serif;
+  }
+  .font-dyslexic {
+    font-family: 'Atkinson Hyperlegible', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  .font-sans-ui {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  .font-mono-reader {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Custom desktop reading scrollbars */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+}
+
+/* Text rendering optimization for long-form reading */
+.reading-content {
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Smooth page transitions */
+.page-spread {
+  column-fill: auto;
+  break-inside: avoid;
+}
