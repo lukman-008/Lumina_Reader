@@ -49,6 +49,8 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   readingRulerHeight: 44,
   readingRulerOpacity: 0.22,
   autoPagingWpm: 240,
+  accentColor: 'amber',
+  progressDisplayMode: 'chapter',
 };
 
 export async function loadSavedSettings(): Promise<ReaderSettings> {

@@ -20,7 +20,7 @@ import {
   Pause,
   Eye,
 } from 'lucide-react';
-import type { Book, ReaderSettings, Highlight, Bookmark, ReadingTheme } from '../types';
+import type { Book, ReaderSettings, Highlight, Bookmark, ReadingTheme, AccentColor } from '../types';
 import { db } from '../services/db';
 import { ttsService } from '../services/ttsService';
 import { estimateReadingTimeMinutes } from '../services/bookParser';
@@ -29,6 +29,8 @@ import { TypographyToolbar } from './TypographyToolbar';
 import { TOCDrawer, AnnotationsDrawer } from './ReaderDrawers';
 import { AIAssistantDrawer } from './AIAssistantDrawer';
 import { SelectionPopup } from './SelectionPopup';
+import { HighlightPopover } from './HighlightPopover';
+import { ReadingProgressBar } from './ReadingProgressBar';
 import { TTSAudioBar } from './TTSAudioBar';
 import { RSVPModal } from './RSVPModal';
 import { SoundscapeModal } from './SoundscapeModal';
@@ -68,6 +70,20 @@ const THEME_STYLES: Record<
     border: 'border-[#2d3344]',
     accent: 'text-amber-400',
   },
+  nordic: {
+    bg: 'bg-[#181b22]',
+    text: 'text-[#e2e8f0]',
+    subtext: 'text-[#94a3b8]',
+    border: 'border-[#282d3b]',
+    accent: 'text-sky-400',
+  },
+  sage: {
+    bg: 'bg-[#111b15]',
+    text: 'text-[#dceee3]',
+    subtext: 'text-[#8ca697]',
+    border: 'border-[#1d2f25]',
+    accent: 'text-emerald-400',
+  },
   amoled: {
     bg: 'bg-[#000000]',
     text: 'text-[#e4e4e7]',
@@ -82,6 +98,14 @@ const THEME_STYLES: Record<
     border: 'border-[#e5e5e5]',
     accent: 'text-black font-bold',
   },
+};
+
+const ACCENT_MAP: Record<AccentColor, { bg: string; text: string }> = {
+  amber: { bg: 'bg-amber-500', text: 'text-amber-500' },
+  emerald: { bg: 'bg-emerald-500', text: 'text-emerald-500' },
+  sky: { bg: 'bg-sky-500', text: 'text-sky-500' },
+  rose: { bg: 'bg-rose-500', text: 'text-rose-500' },
+  violet: { bg: 'bg-purple-500', text: 'text-purple-500' },
 };
 
 const FONT_CLASSES: Record<ReaderSettings['fontFamily'], string> = {
@@ -135,6 +159,12 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
   const [selectedText, setSelectedText] = useState('');
 
+  // Active clicked highlight popover state
+  const [activeHighlightPopover, setActiveHighlightPopover] = useState<{
+    highlight: Highlight;
+    position: { x: number; y: number };
+  } | null>(null);
+
   // TTS current sentence state
   const [ttsCurrentSentence, setTtsCurrentSentence] = useState('');
 
@@ -142,7 +172,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   const contentAreaRef = useRef<HTMLDivElement>(null);
 
   const currentChapter = book.chapters[currentChapterIndex] || book.chapters[0];
-  const themeStyle = THEME_STYLES[settings.theme];
+  const themeStyle = THEME_STYLES[settings.theme] || THEME_STYLES.paper;
+  const activeAccent = settings.accentColor || 'amber';
+  const accentConfig = ACCENT_MAP[activeAccent] || ACCENT_MAP.amber;
 
   // Start habit tracking session on book open, end on unmount
   useEffect(() => {
@@ -236,7 +268,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       setCurrentPageIndex(0);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      // Reached the end of book
       setIsAutoPacing(false);
     }
   };
@@ -304,6 +335,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         setIsRSVPOpen(false);
         setIsSoundscapeOpen(false);
         setIsHabitsOpen(false);
+        setActiveHighlightPopover(null);
       } else if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
         e.preventDefault();
         toggleBookmark();
@@ -352,8 +384,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     }
   };
 
-  // Add highlight
-  const handleCreateHighlight = async (color: Highlight['color']) => {
+  // Create highlight
+  const handleCreateHighlight = async (color: Highlight['color'], note?: string) => {
     if (!selectedText) return;
     const newHighlight: Highlight = {
       id: 'hl-' + Date.now(),
@@ -361,6 +393,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       chapterIndex: currentChapterIndex,
       selectedText,
       color,
+      note,
       createdAt: Date.now(),
     };
 
@@ -368,6 +401,25 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     setHighlights((prev) => [...prev, newHighlight]);
     setSelectionPosition(null);
     window.getSelection()?.removeAllRanges();
+  };
+
+  // Update existing highlight (color or note)
+  const handleUpdateHighlight = async (id: string, updates: Partial<Highlight>) => {
+    await db.highlights.update(id, updates);
+    setHighlights((prev) => prev.map((h) => (h.id === id ? { ...h, ...updates } : h)));
+    if (activeHighlightPopover && activeHighlightPopover.highlight.id === id) {
+      setActiveHighlightPopover({
+        ...activeHighlightPopover,
+        highlight: { ...activeHighlightPopover.highlight, ...updates },
+      });
+    }
+  };
+
+  // Delete highlight
+  const handleDeleteHighlight = async (id: string) => {
+    await db.highlights.delete(id);
+    setHighlights((prev) => prev.filter((h) => h.id !== id));
+    setActiveHighlightPopover(null);
   };
 
   // Toggle bookmark on active page
@@ -391,13 +443,18 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         bookId: book.id,
         chapterIndex: currentChapterIndex,
         pageIndex: safePageIndex,
-        label: `${currentChapter.title} (Page ${safePageIndex + 1})`,
+        label: `${currentChapter.title} (p. ${safePageIndex + 1})`,
         snippet,
         createdAt: Date.now(),
       };
       await db.bookmarks.put(newBm);
       setBookmarks((prev) => [...prev, newBm]);
     }
+  };
+
+  const handleUpdateBookmark = async (id: string, label: string) => {
+    await db.bookmarks.update(id, { label });
+    setBookmarks((prev) => prev.map((b) => (b.id === id ? { ...b, label } : b)));
   };
 
   // TTS Start
@@ -408,7 +465,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     setSelectionPosition(null);
   };
 
-  // Bionic reading word transformation
+  // Bionic reading word transformation helper
   const formatBionicText = (text: string) => {
     if (!settings.bionicReading) return text;
     return text.split(' ').map((word, i) => {
@@ -422,6 +479,75 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         </React.Fragment>
       );
     });
+  };
+
+  // Renders paragraph text with actual clickable, multi-color highlights
+  const renderParagraphContent = (paragraphText: string) => {
+    const chapterHighlights = highlights.filter(
+      (h) => h.chapterIndex === currentChapterIndex && paragraphText.includes(h.selectedText)
+    );
+
+    if (chapterHighlights.length === 0) {
+      return formatBionicText(paragraphText);
+    }
+
+    // Sort highlights by where they appear
+    const sorted = [...chapterHighlights].sort(
+      (a, b) => paragraphText.indexOf(a.selectedText) - paragraphText.indexOf(b.selectedText)
+    );
+
+    const elements: React.ReactNode[] = [];
+    let lastIndex = 0;
+
+    const highlightColors: Record<Highlight['color'], string> = {
+      yellow: 'bg-amber-400/35 border-b-2 border-amber-400/90 text-inherit',
+      emerald: 'bg-emerald-400/35 border-b-2 border-emerald-400/90 text-inherit',
+      sky: 'bg-sky-400/35 border-b-2 border-sky-400/90 text-inherit',
+      rose: 'bg-rose-400/35 border-b-2 border-rose-400/90 text-inherit',
+      amber: 'bg-orange-400/35 border-b-2 border-orange-400/90 text-inherit',
+      violet: 'bg-purple-400/35 border-b-2 border-purple-400/90 text-inherit',
+    };
+
+    sorted.forEach((h, i) => {
+      const idx = paragraphText.indexOf(h.selectedText, lastIndex);
+      if (idx === -1) return;
+
+      if (idx > lastIndex) {
+        elements.push(
+          <span key={`t-${lastIndex}`}>{formatBionicText(paragraphText.slice(lastIndex, idx))}</span>
+        );
+      }
+
+      elements.push(
+        <mark
+          key={`hl-${h.id}-${i}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            setActiveHighlightPopover({
+              highlight: h,
+              position: { x: rect.left + rect.width / 2, y: rect.top - 10 },
+            });
+          }}
+          className={`cursor-pointer rounded-xs px-0.5 transition hover:opacity-85 ${
+            highlightColors[h.color] || highlightColors.yellow
+          }`}
+          title={h.note ? `Note: ${h.note}` : 'Click to edit highlight'}
+        >
+          {h.selectedText}
+        </mark>
+      );
+
+      lastIndex = idx + h.selectedText.length;
+    });
+
+    if (lastIndex < paragraphText.length) {
+      elements.push(
+        <span key={`t-end`}>{formatBionicText(paragraphText.slice(lastIndex))}</span>
+      );
+    }
+
+    return elements;
   };
 
   // Circadian Warmth calculation
@@ -449,10 +575,6 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     });
     return results;
   }, [searchQuery, book.chapters]);
-
-  const estimatedMinutesLeft = estimateReadingTimeMinutes(
-    (totalPagesInChapter - safePageIndex) * wordsPerPage
-  );
 
   return (
     <div
@@ -493,7 +615,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={onBackToLibrary}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition flex items-center gap-1.5 text-xs font-medium ${themeStyle.text}`}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition flex items-center gap-1.5 text-xs font-medium cursor-pointer ${themeStyle.text}`}
               title="Return to Library"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -502,7 +624,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
 
             <button
               onClick={() => setIsTOCDrawerOpen(true)}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition flex items-center gap-1.5 text-xs ${themeStyle.subtext}`}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition flex items-center gap-1.5 text-xs cursor-pointer ${themeStyle.subtext}`}
               title="Table of Contents (Ctrl/⌘+T)"
             >
               <List className="w-4 h-4" />
@@ -514,7 +636,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsSearchOpen(true)}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full border ${themeStyle.border} text-xs ${themeStyle.subtext} hover:opacity-100 transition`}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full border ${themeStyle.border} text-xs ${themeStyle.subtext} hover:opacity-100 transition cursor-pointer`}
             >
               <Search className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Search in book</span>
@@ -526,8 +648,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             {/* Auto-Pacing toggle */}
             <button
               onClick={() => setIsAutoPacing((prev) => !prev)}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition ${
-                isAutoPacing ? 'text-amber-500 bg-amber-500/10' : themeStyle.subtext
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${
+                isAutoPacing ? `${accentConfig.text} bg-amber-500/10` : themeStyle.subtext
               }`}
               title={isAutoPacing ? 'Pause Auto-Pacing (P)' : 'Start Auto-Pacing (P)'}
             >
@@ -537,17 +659,17 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             {/* RSVP Speed Reader */}
             <button
               onClick={() => setIsRSVPOpen(true)}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition ${themeStyle.subtext}`}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${themeStyle.subtext}`}
               title="RSVP Speed Reader (V)"
             >
-              <Zap className="w-4 h-4 text-amber-500" />
+              <Zap className={`w-4 h-4 ${accentConfig.text}`} />
             </button>
 
             {/* Reading Ruler Toggle */}
             <button
               onClick={() => onUpdateSettings({ readingRuler: !settings.readingRuler })}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition ${
-                settings.readingRuler ? 'text-amber-500 bg-amber-500/10' : themeStyle.subtext
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${
+                settings.readingRuler ? `${accentConfig.text} bg-amber-500/10` : themeStyle.subtext
               }`}
               title="Toggle Reading Ruler (R)"
             >
@@ -557,7 +679,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             {/* Ambient Soundscapes */}
             <button
               onClick={() => setIsSoundscapeOpen(true)}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition ${themeStyle.subtext}`}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${themeStyle.subtext}`}
               title="Soundscapes & Warmth (S)"
             >
               <CloudRain className="w-4 h-4" />
@@ -566,17 +688,17 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             {/* Reading Habits & Pomodoro */}
             <button
               onClick={() => setIsHabitsOpen(true)}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition ${themeStyle.subtext}`}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${themeStyle.subtext}`}
               title="Reading Habits & Focus Timer (H)"
             >
-              <Flame className="w-4 h-4 fill-amber-500/20 text-amber-500" />
+              <Flame className={`w-4 h-4 ${accentConfig.text}`} />
             </button>
 
             {/* TTS Audio Player button */}
             <button
               onClick={() => startTTS()}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition ${
-                isTTSOpen ? 'text-amber-500' : themeStyle.subtext
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${
+                isTTSOpen ? accentConfig.text : themeStyle.subtext
               }`}
               title="Read Aloud with Offline Text-to-Speech"
             >
@@ -586,25 +708,25 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             {/* Bookmark button */}
             <button
               onClick={toggleBookmark}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition ${
-                isCurrentPageBookmarked ? 'text-amber-500' : themeStyle.subtext
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${
+                isCurrentPageBookmarked ? accentConfig.text : themeStyle.subtext
               }`}
-              title={isCurrentPageBookmarked ? 'Remove Bookmark' : 'Bookmark Page (Ctrl/⌘+B)'}
+              title={isCurrentPageBookmarked ? 'Remove Bookmark (Ctrl/⌘+B)' : 'Bookmark Page (Ctrl/⌘+B)'}
             >
               <BookmarkIcon
-                className={`w-4 h-4 ${isCurrentPageBookmarked ? 'fill-amber-500 text-amber-500' : ''}`}
+                className={`w-4 h-4 ${isCurrentPageBookmarked ? 'fill-current' : ''}`}
               />
             </button>
 
             {/* Highlights & Notes */}
             <button
               onClick={() => setIsAnnotationsDrawerOpen(true)}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition relative ${themeStyle.subtext}`}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition relative cursor-pointer ${themeStyle.subtext}`}
               title="Notebook & Highlights (Ctrl/⌘+H)"
             >
               <Highlighter className="w-4 h-4" />
               {highlights.length > 0 && (
-                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500" />
+                <span className={`absolute top-1 right-1 w-2 h-2 rounded-full ${accentConfig.bg}`} />
               )}
             </button>
 
@@ -621,8 +743,8 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             {/* Typography Popover Toggle */}
             <button
               onClick={() => setIsTypographyOpen((prev) => !prev)}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition ${
-                isTypographyOpen ? 'text-amber-500' : themeStyle.subtext
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${
+                isTypographyOpen ? accentConfig.text : themeStyle.subtext
               }`}
               title="Typography & Display Controls"
             >
@@ -632,7 +754,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             {/* Zen Mode */}
             <button
               onClick={onToggleZenMode}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition ${themeStyle.subtext}`}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${themeStyle.subtext}`}
               title="Distraction-Free Zen Mode (Z)"
             >
               <Maximize2 className="w-4 h-4" />
@@ -648,7 +770,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           <span>Auto-Pacing active ({settings.autoPagingWpm || 240} WPM)</span>
           <button
             onClick={() => setIsAutoPacing(false)}
-            className="p-1 text-slate-400 hover:text-white"
+            className="p-1 text-slate-400 hover:text-white cursor-pointer"
             title="Stop Auto-Pacing (P)"
           >
             <X className="w-3 h-3" />
@@ -682,10 +804,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         onClose={() => setIsAnnotationsDrawerOpen(false)}
         highlights={highlights}
         bookmarks={bookmarks}
-        onDeleteHighlight={async (id) => {
-          await db.highlights.delete(id);
-          setHighlights((prev) => prev.filter((h) => h.id !== id));
-        }}
+        onDeleteHighlight={handleDeleteHighlight}
         onDeleteBookmark={async (id) => {
           await db.bookmarks.delete(id);
           setBookmarks((prev) => prev.filter((b) => b.id !== id));
@@ -694,6 +813,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
           setCurrentChapterIndex(bm.chapterIndex);
           setCurrentPageIndex(bm.pageIndex);
         }}
+        onUpdateBookmark={handleUpdateBookmark}
         bookTitle={book.title}
       />
 
@@ -733,16 +853,27 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         position={selectionPosition}
         selectedText={selectedText}
         onHighlight={handleCreateHighlight}
-        onAddNote={() => {
-          const note = prompt('Add note for selection:');
-          if (note) {
-            handleCreateHighlight('yellow');
-          }
-        }}
+        onAddNote={() => {}}
         onReadAloud={() => startTTS(selectedText)}
         onAskAI={() => setIsAIOpen(true)}
         onClose={() => setSelectionPosition(null)}
       />
+
+      {/* Highlight Click / Edit Popover */}
+      {activeHighlightPopover && (
+        <HighlightPopover
+          highlight={activeHighlightPopover.highlight}
+          position={activeHighlightPopover.position}
+          onClose={() => setActiveHighlightPopover(null)}
+          onUpdateHighlight={handleUpdateHighlight}
+          onDeleteHighlight={handleDeleteHighlight}
+          onAskAI={(text) => {
+            setSelectedText(text);
+            setIsAIOpen(true);
+            setActiveHighlightPopover(null);
+          }}
+        />
+      )}
 
       {/* TTS Audio Player Bar */}
       <TTSAudioBar
@@ -762,7 +893,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               </div>
               <button
                 onClick={() => setIsSearchOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -808,6 +939,21 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
         ref={contentAreaRef}
         className="flex-1 flex flex-col justify-between relative overflow-y-auto"
       >
+        {/* Visual Bookmark Ribbon on Corner of Page */}
+        {isCurrentPageBookmarked && (
+          <div
+            onClick={toggleBookmark}
+            className="absolute top-0 right-6 md:right-12 z-25 cursor-pointer group animate-in slide-in-from-top-4 duration-200"
+            title="Page is Bookmarked · Click to remove"
+          >
+            <div
+              className={`w-7 h-10 ${accentConfig.bg} shadow-xl flex items-end justify-center pb-1 text-slate-950 font-bold transition-all group-hover:h-12 rounded-b-sm`}
+            >
+              <BookmarkIcon className="w-4 h-4 fill-slate-950 text-slate-950" />
+            </div>
+          </div>
+        )}
+
         {/* Click zones for desktop page turning */}
         <div
           onClick={handlePrevPage}
@@ -864,7 +1010,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   .slice(0, Math.ceil(activePageParagraphs.length / 2))
                   .map((p, idx) => (
                     <p key={idx} className="indent-6">
-                      {formatBionicText(p)}
+                      {renderParagraphContent(p)}
                     </p>
                   ))}
               </div>
@@ -873,7 +1019,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
                   .slice(Math.ceil(activePageParagraphs.length / 2))
                   .map((p, idx) => (
                     <p key={idx} className="indent-6">
-                      {formatBionicText(p)}
+                      {renderParagraphContent(p)}
                     </p>
                   ))}
               </div>
@@ -882,7 +1028,7 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             <div className="space-y-5 leading-relaxed">
               {currentChapter.content.split('\n\n').map((p, idx) => (
                 <p key={idx} className="indent-6">
-                  {formatBionicText(p)}
+                  {renderParagraphContent(p)}
                 </p>
               ))}
             </div>
@@ -890,40 +1036,32 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
             <div className="space-y-5 leading-relaxed">
               {activePageParagraphs.map((p, idx) => (
                 <p key={idx} className="indent-6">
-                  {formatBionicText(p)}
+                  {renderParagraphContent(p)}
                 </p>
               ))}
             </div>
           )}
         </article>
 
-        {/* Persistent Bottom Reading Navigation Bar */}
-        <footer
-          className={`h-11 border-t ${themeStyle.border} px-6 flex items-center justify-between text-xs ${themeStyle.subtext} z-20 shrink-0 select-none font-sans`}
-        >
-          <div className="flex items-center gap-3">
-            <span>
-              Chapter {currentChapterIndex + 1} of {book.chapters.length}
-            </span>
-            <span className="hidden sm:inline">·</span>
-            <span className="hidden sm:inline">{estimatedMinutesLeft} mins left in chapter</span>
-          </div>
-
-          {/* Visual Progress Bar */}
-          <div className="flex items-center gap-3">
-            <span className="font-mono">
-              Page {safePageIndex + 1} / {totalPagesInChapter}
-            </span>
-            <div className="w-24 sm:w-36 h-1.5 rounded-full bg-current/15 overflow-hidden">
-              <div
-                style={{
-                  width: `${Math.round(((safePageIndex + 1) / totalPagesInChapter) * 100)}%`,
-                }}
-                className="h-full bg-amber-500 rounded-full transition-all duration-300"
-              />
-            </div>
-          </div>
-        </footer>
+        {/* World-class Scrubbable Reading Progress Bar */}
+        <ReadingProgressBar
+          book={book}
+          currentChapterIndex={currentChapterIndex}
+          currentPageIndex={safePageIndex}
+          totalPagesInChapter={totalPagesInChapter}
+          wordsPerPage={wordsPerPage}
+          onNavigatePage={(idx) => setCurrentPageIndex(idx)}
+          onNavigateChapter={(chIdx) => {
+            setCurrentChapterIndex(chIdx);
+            setCurrentPageIndex(0);
+          }}
+          onOpenTOC={() => setIsTOCDrawerOpen(true)}
+          isBookmarked={isCurrentPageBookmarked}
+          onToggleBookmark={toggleBookmark}
+          settings={settings}
+          onUpdateSettings={onUpdateSettings}
+          accentClass={accentConfig.bg}
+        />
       </main>
     </div>
   );

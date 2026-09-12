@@ -1,4 +1,6 @@
-export type ReadingTheme = 'paper' | 'sepia' | 'dusk' | 'amoled' | 'eink';
+export type ReadingTheme = 'paper' | 'sepia' | 'dusk' | 'amoled' | 'eink' | 'sage' | 'nordic';
+
+export type AccentColor = 'amber' | 'emerald' | 'sky' | 'rose' | 'violet';
 
 export type FontFamilyChoice = 'literata' | 'merriweather' | 'sans' | 'dyslexic' | 'mono';
 
@@ -20,7 +22,7 @@ export interface Highlight {
   bookId: string;
   chapterIndex: number;
   selectedText: string;
-  color: 'yellow' | 'emerald' | 'sky' | 'rose' | 'amber';
+  color: 'yellow' | 'emerald' | 'sky' | 'rose' | 'amber' | 'violet';
   note?: string;
   createdAt: number;
 }
@@ -87,6 +89,9 @@ export interface ReaderSettings {
   readingRulerOpacity: number; // 0.1 to 0.4
   // Auto-Pacing
   autoPagingWpm: number; // 150 to 500
+  // UI Customization
+  accentColor?: AccentColor;
+  progressDisplayMode?: 'book' | 'chapter';
 }
 
 export interface ReadingSession {
