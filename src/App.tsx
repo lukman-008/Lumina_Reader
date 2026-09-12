@@ -13,7 +13,7 @@ import { SearchIndexModal } from './components/SearchIndexModal';
 import { FileImporterModal } from './components/FileImporterModal';
 import { ReadingProgressSyncModal } from './components/ReadingProgressSyncModal';
 import { AnnotationManagerModal } from './components/AnnotationManagerModal';
-import { WifiOff } from 'lucide-react';
+import { WifiOff, Upload } from 'lucide-react';
 
 export default function App() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -29,9 +29,44 @@ export default function App() {
   const [isFileImporterOpen, setIsFileImporterOpen] = useState(false);
   const [isProgressSyncOpen, setIsProgressSyncOpen] = useState(false);
   const [isAnnotationManagerOpen, setIsAnnotationManagerOpen] = useState(false);
+  const [isGlobalDragging, setIsGlobalDragging] = useState(false);
+  const [globalDroppedFiles, setGlobalDroppedFiles] = useState<FileList | null>(null);
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
+
+  // Global drag and drop interceptor
+  useEffect(() => {
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer?.types.includes('Files')) {
+        setIsGlobalDragging(true);
+      }
+    };
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.clientX === 0 && e.clientY === 0) {
+        setIsGlobalDragging(false);
+      }
+    };
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      setIsGlobalDragging(false);
+      if (e.dataTransfer?.files?.length) {
+        setGlobalDroppedFiles(e.dataTransfer.files);
+        setIsFileImporterOpen(true);
+      }
+    };
+
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+    return () => {
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, []);
 
   // Initialize offline database & settings
   useEffect(() => {
@@ -222,10 +257,24 @@ export default function App() {
       {/* File Importer Modal (Batch EPUB, PDF, MD, TXT & Web Paste) */}
       <FileImporterModal
         isOpen={isFileImporterOpen}
-        onClose={() => setIsFileImporterOpen(false)}
+        onClose={() => {
+          setIsFileImporterOpen(false);
+          setGlobalDroppedFiles(null);
+        }}
         shelves={shelves}
         onBooksImported={refreshBooks}
+        initialFiles={globalDroppedFiles}
       />
+
+      {isGlobalDragging && (
+        <div className="fixed inset-0 z-[100] bg-amber-500/10 backdrop-blur-[2px] border-4 border-amber-500 border-dashed flex items-center justify-center pointer-events-none">
+          <div className="bg-slate-900 shadow-2xl rounded-2xl p-8 flex flex-col items-center gap-4 text-amber-500 animate-in fade-in zoom-in-95 duration-200">
+            <Upload className="w-12 h-12" />
+            <h2 className="text-2xl font-semibold tracking-tight text-white">Drop files to import</h2>
+            <p className="text-sm text-slate-400">EPUB, PDF, TXT, or Markdown</p>
+          </div>
+        </div>
+      )}
 
       {/* Reading Progress & Annotation Sync Modal (JSON/Code cross-device) */}
       <ReadingProgressSyncModal

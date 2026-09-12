@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Upload,
   FileText,
@@ -23,6 +23,7 @@ interface FileImporterModalProps {
   onClose: () => void;
   shelves: Shelf[];
   onBooksImported: () => void;
+  initialFiles?: FileList | null;
 }
 
 export const FileImporterModal: React.FC<FileImporterModalProps> = ({
@@ -30,6 +31,7 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
   onClose,
   shelves,
   onBooksImported,
+  initialFiles,
 }) => {
   const [activeTab, setActiveTab] = useState<'upload' | 'text'>('upload');
   const [queue, setQueue] = useState<ImportQueueItem[]>([]);
@@ -42,6 +44,13 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteAuthor, setPasteAuthor] = useState('');
   const [pasteContent, setPasteContent] = useState('');
+
+  // Handle passed-in initial files
+  useEffect(() => {
+    if (isOpen && initialFiles && initialFiles.length > 0) {
+      handleFileSelect(initialFiles);
+    }
+  }, [isOpen, initialFiles]);
 
   if (!isOpen) return null;
 

@@ -2,6 +2,12 @@ import type { Book, BookChapter } from '../types';
 import { db } from './db';
 import { SAMPLE_BOOKS } from './sampleBooks';
 
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import JSZip from 'jszip';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
+
 export async function initializeDatabaseWithSeed(): Promise<Book[]> {
   try {
     const existingBooks = await db.books.toArray();
@@ -63,17 +69,65 @@ export async function parseUploadedBook(file: File): Promise<Book> {
     return parseEpubFile(file, title, randomGradient);
   }
 
-  // Fallback for PDF or other formats
+  // Handle PDF format
+  if (extension === 'pdf') {
+    const arrayBuffer = await file.arrayBuffer();
+    let extractedText = '';
+    
+    try {
+      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
+      const pdf = await loadingTask.promise;
+      const numPages = pdf.numPages;
+
+      for (let i = 1; i <= numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const strings = content.items.map((item: any) => item.str);
+        extractedText += strings.join(' ') + '\n\n';
+      }
+    } catch (err) {
+      console.error('PDF parsing error:', err);
+      extractedText = `[Document: ${file.name}]\n\nThis PDF document could not be parsed correctly or contains no readable text.`;
+    }
+
+    // Cleanup excessive whitespace while preserving paragraphs
+    extractedText = extractedText.replace(/ +/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+
+    if (extractedText.length < 50) {
+      extractedText = `[Document: ${file.name}]\n\nThis PDF document might contain scanned images instead of text, or could not be parsed correctly.`;
+    }
+
+    const chapters = splitIntoChapters(extractedText, title);
+    const totalWords = countWords(extractedText);
+
+    return {
+      id: 'book-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+      title,
+      author: 'PDF Document',
+      description: `Imported PDF: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`,
+      format: 'pdf',
+      totalWords: Math.max(totalWords, 1200),
+      coverGradient: randomGradient,
+      chapters,
+      category: 'PDF Documents',
+      addedAt: Date.now(),
+      readingProgress: {
+        currentChapterIndex: 0,
+        currentPageIndex: 0,
+        percentage: 0,
+        lastReadTimestamp: Date.now(),
+      },
+    };
+  }
+
+  // Fallback for other formats
   const arrayBuffer = await file.arrayBuffer();
-  // Decode basic readable text strings if PDF
   const textDecoder = new TextDecoder('utf-8', { fatal: false });
-  const rawPdfString = textDecoder.decode(arrayBuffer);
-  
-  // Extract visible ASCII characters from PDF stream
-  const extractedMatches = rawPdfString.match(/[A-Za-z0-9 ,.?!'"\n\r:;()\-]{30,}/g);
+  const rawString = textDecoder.decode(arrayBuffer);
+  const extractedMatches = rawString.match(/[A-Za-z0-9 ,.?!'"\n\r:;()\-]{30,}/g);
   const extractedText = extractedMatches && extractedMatches.length > 0 
     ? extractedMatches.join('\n\n')
-    : `[Document: ${file.name}]\n\nThis PDF document has been loaded into your local offline storage. Lumina Reader is rendering it in reflowable reader mode.`;
+    : `[Document: ${file.name}]\n\nUnsupported document format.`;
 
   const chapters = splitIntoChapters(extractedText, title);
   const totalWords = countWords(extractedText);
@@ -81,13 +135,13 @@ export async function parseUploadedBook(file: File): Promise<Book> {
   return {
     id: 'book-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
     title,
-    author: 'PDF Document',
-    description: `Imported PDF: ${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`,
-    format: 'pdf',
+    author: 'Unknown Author',
+    description: `Imported Document: ${file.name}`,
+    format: 'txt',
     totalWords: Math.max(totalWords, 1200),
     coverGradient: randomGradient,
     chapters,
-    category: 'PDF Documents',
+    category: 'Documents',
     addedAt: Date.now(),
     readingProgress: {
       currentChapterIndex: 0,
@@ -99,21 +153,47 @@ export async function parseUploadedBook(file: File): Promise<Book> {
 }
 
 async function parseEpubFile(file: File, title: string, gradient: string): Promise<Book> {
-  // EPUB is a zipped archive containing HTML/XHTML chapters.
-  // We can read the text content directly
-  const text = await file.text();
-  
-  // Extract paragraphs or chapters from HTML tags
-  const cleanText = text
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  let fullText = '';
+  try {
+    const zip = await JSZip.loadAsync(file);
+    const htmlFiles = Object.keys(zip.files).filter(name => 
+      name.endsWith('.html') || name.endsWith('.xhtml') || name.endsWith('.htm')
+    );
 
-  const usableText = cleanText.length > 200 
-    ? cleanText 
-    : `EPUB Book: ${title}\n\nWelcome to your imported EPUB book. Enjoy clean typography and distraction-free offline reading.`;
+    // Sort files to try and preserve reading order (simplified approach, ideally we'd parse the spine in the OPF file)
+    htmlFiles.sort();
+
+    for (const htmlFile of htmlFiles) {
+      const fileData = await zip.files[htmlFile].async('string');
+      // Extract text content from body or full html if no body
+      const bodyMatch = fileData.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      const contentToClean = bodyMatch ? bodyMatch[1] : fileData;
+      
+      const cleanText = contentToClean
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<\/p>/gi, '\n\n')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<\/div>/gi, '\n\n')
+        .replace(/<h[1-6][^>]*>/gi, '\n\n')
+        .replace(/<\/h[1-6]>/gi, '\n\n')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/ {2,}/g, ' ')
+        .replace(/\n\s*\n/g, '\n\n')
+        .trim();
+        
+      if (cleanText) {
+        fullText += cleanText + '\n\n';
+      }
+    }
+  } catch (err) {
+    console.error('EPUB parsing error:', err);
+    fullText = `[EPUB Document: ${file.name}]\n\nFailed to extract readable text from this EPUB file.`;
+  }
+
+  const usableText = fullText.trim().length > 200 
+    ? fullText.trim() 
+    : `EPUB Book: ${title}\n\nWelcome to your imported EPUB book. Enjoy clean typography and distraction-free offline reading.\n\n${fullText.trim()}`;
 
   const chapters = splitIntoChapters(usableText, title);
   const totalWords = countWords(usableText);
@@ -121,7 +201,7 @@ async function parseEpubFile(file: File, title: string, gradient: string): Promi
   return {
     id: 'book-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
     title,
-    author: 'EPUB Author',
+    author: 'Unknown Author',
     description: usableText.slice(0, 240).trim() + '...',
     format: 'epub',
     totalWords,

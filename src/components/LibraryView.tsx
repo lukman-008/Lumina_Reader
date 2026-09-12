@@ -98,27 +98,29 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   }, []);
 
   // Filter books based on active tab and search query
-  const filteredBooks = books.filter((book) => {
+  const filteredBooks = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    const matchesSearch =
-      book.title.toLowerCase().includes(q) ||
-      book.author.toLowerCase().includes(q) ||
-      (book.tags && book.tags.some((t) => t.toLowerCase().includes(q)));
+    return books.filter((book) => {
+      const matchesSearch =
+        book.title.toLowerCase().includes(q) ||
+        book.author.toLowerCase().includes(q) ||
+        (book.tags && book.tags.some((t) => t.toLowerCase().includes(q)));
 
-    if (!matchesSearch) return false;
+      if (!matchesSearch) return false;
 
-    if (activeTab === 'all') return true;
-    if (activeTab === 'reading') {
-      const p = book.readingProgress?.percentage || 0;
-      return p > 0 && p < 100;
-    }
-    if (activeTab === 'favorites') return !!book.isFavorite;
-    if (activeTab === 'finished') {
-      return (book.readingProgress?.percentage || 0) === 100;
-    }
-    // Specific shelf
-    return book.shelfId === activeTab;
-  });
+      if (activeTab === 'all') return true;
+      if (activeTab === 'reading') {
+        const p = book.readingProgress?.percentage || 0;
+        return p > 0 && p < 100;
+      }
+      if (activeTab === 'favorites') return !!book.isFavorite;
+      if (activeTab === 'finished') {
+        return (book.readingProgress?.percentage || 0) === 100;
+      }
+      // Specific shelf
+      return book.shelfId === activeTab;
+    });
+  }, [books, searchQuery, activeTab]);
 
   // Sort filtered books
   const sortedBooks = useMemo(() => {
