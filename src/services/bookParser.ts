@@ -35,45 +35,38 @@ const GRADIENTS = [
 ];
 
 export async function parseUploadedBook(file: File): Promise<Book> {
-  const extension = file.name.split('.').pop()?.toLowerCase() || 'txt';
   const rawTitle = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
   const title = rawTitle.charAt(0).toUpperCase() + rawTitle.slice(1);
   const randomGradient = GRADIENTS[Math.floor(Math.random() * GRADIENTS.length)];
 
-  if (extension === 'txt' || extension === 'md') {
-    const text = await file.text();
-    const chapters = splitIntoChapters(text, title);
-    const totalWords = countWords(text);
+  const arrayBuffer = await file.arrayBuffer();
+  let extension = file.name.includes('.') ? (file.name.split('.').pop()?.toLowerCase() || 'txt') : '';
 
-    return {
-      id: 'book-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
-      title,
-      author: 'Unknown Author',
-      description: text.slice(0, 240).trim() + '...',
-      format: extension === 'md' ? 'md' : 'txt',
-      totalWords,
-      coverGradient: randomGradient,
-      chapters,
-      category: extension === 'md' ? 'Notes & Manuscripts' : 'General Literature',
-      addedAt: Date.now(),
-      readingProgress: {
-        currentChapterIndex: 0,
-        currentPageIndex: 0,
-        percentage: 0,
-        lastReadTimestamp: Date.now(),
-      },
-    };
+  // Magic bytes check to definitively identify files lacking extensions
+  // Read up to first 1024 bytes for signature scanning (handles BOMs or leading whitespaces)
+  const headerView = new Uint8Array(arrayBuffer.slice(0, Math.min(1024, arrayBuffer.byteLength)));
+  let headerStr = '';
+  for (let i = 0; i < headerView.length; i++) {
+    headerStr += String.fromCharCode(headerView[i]);
+  }
+  
+  if (headerStr.includes('%PDF-') || file.type === 'application/pdf') {
+    extension = 'pdf';
+  } else if (headerView[0] === 0x50 && headerView[1] === 0x4B && headerView[2] === 0x03 && headerView[3] === 0x04) {
+    // PK zip signature. If it's not another known zip format, assume epub
+    if (extension !== 'epub' && extension !== 'zip' && file.type === 'application/epub+zip') {
+       extension = 'epub';
+    } else if (!extension) {
+       extension = 'epub'; // Default to epub for unknown zips in this context
+    }
   }
 
   if (extension === 'epub') {
     return parseEpubFile(file, title, randomGradient);
   }
 
-  // Handle PDF format
   if (extension === 'pdf') {
-    const arrayBuffer = await file.arrayBuffer();
     let extractedText = '';
-    
     try {
       const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) });
       const pdf = await loadingTask.promise;
@@ -120,14 +113,19 @@ export async function parseUploadedBook(file: File): Promise<Book> {
     };
   }
 
-  // Fallback for other formats
-  const arrayBuffer = await file.arrayBuffer();
+  // Fallback for TXT, MD, and completely unknown formats
   const textDecoder = new TextDecoder('utf-8', { fatal: false });
   const rawString = textDecoder.decode(arrayBuffer);
-  const extractedMatches = rawString.match(/[A-Za-z0-9 ,.?!'"\n\r:;()\-]{30,}/g);
-  const extractedText = extractedMatches && extractedMatches.length > 0 
-    ? extractedMatches.join('\n\n')
-    : `[Document: ${file.name}]\n\nUnsupported document format.`;
+  let extractedText = '';
+
+  if (extension === 'txt' || extension === 'md') {
+    extractedText = rawString;
+  } else {
+    const extractedMatches = rawString.match(/[A-Za-z0-9 ,.?!'"\n\r:;()\-]{30,}/g);
+    extractedText = extractedMatches && extractedMatches.length > 0 
+      ? extractedMatches.join('\n\n')
+      : `[Document: ${file.name}]\n\nUnsupported document format.`;
+  }
 
   const chapters = splitIntoChapters(extractedText, title);
   const totalWords = countWords(extractedText);
@@ -137,11 +135,11 @@ export async function parseUploadedBook(file: File): Promise<Book> {
     title,
     author: 'Unknown Author',
     description: `Imported Document: ${file.name}`,
-    format: 'txt',
+    format: extension === 'md' ? 'md' : 'txt',
     totalWords: Math.max(totalWords, 1200),
     coverGradient: randomGradient,
     chapters,
-    category: 'Documents',
+    category: extension === 'md' ? 'Notes & Manuscripts' : 'Documents',
     addedAt: Date.now(),
     readingProgress: {
       currentChapterIndex: 0,
