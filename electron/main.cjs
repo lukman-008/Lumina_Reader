@@ -4,6 +4,9 @@ const path = require('path');
 let mainWindow;
 
 function createWindow() {
+  const iconDist = path.join(__dirname, '../dist/icon.svg');
+  const iconPublic = path.join(__dirname, '../public/icon.svg');
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 850,
@@ -15,7 +18,7 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
     },
-    icon: path.join(__dirname, '../public/icon.svg'),
+    icon: require('fs').existsSync(iconDist) ? iconDist : iconPublic,
   });
 
   // If built, load index.html from dist

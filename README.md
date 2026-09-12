@@ -157,13 +157,34 @@ The server will boot and serve the production application on `http://localhost:3
 
 ---
 
-## 🖥️ Desktop Application Packaging (Optional)
+## 🖥️ Desktop Application Packaging (Windows, macOS, Linux)
 
-Lumina Reader includes a native desktop window titlebar and offline database, making it ready to package as a native desktop application for macOS, Windows, and Linux via Electron:
+Lumina Reader comes pre-configured with Electron and `electron-builder` to package native standalone desktop apps with zero server dependencies:
 
 ```bash
-# Package the desktop application
+# 1. Ensure dependencies (electron & electron-builder) are installed
+npm install
+
+# 2. Package the desktop app for your current operating system
+# (Outputs installer into the `dist-electron/` folder)
 npm run package:desktop
+```
+
+### Platform-specific builds:
+```bash
+# Windows (.exe installer and portable .exe):
+npx electron-builder --win
+
+# macOS (.dmg and .zip):
+npx electron-builder --mac
+
+# Linux (.AppImage and .deb):
+npx electron-builder --linux
+```
+
+### Running Electron in local development:
+```bash
+npm run electron:dev
 ```
 
 ---

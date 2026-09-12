@@ -26,11 +26,20 @@ npm run build
 # Linux produces: .deb & .AppImage
 npx tauri build`;
 
-  const electronCommands = `# 1. Package with electron-builder
-npm install -D electron electron-builder
+  const electronCommands = `# 1. Install all dependencies (including electron & electron-builder)
+npm install
 
-# 2. Compile and package for all target OSs
-npx electron-builder --win --mac --linux`;
+# 2. Package native desktop installer
+# On Windows, this creates an installer (.exe) in dist-electron/
+npm run package:desktop
+
+# (Optional) Target specific OS platform:
+# Windows:
+npx electron-builder --win
+# macOS:
+npx electron-builder --mac
+# Linux:
+npx electron-builder --linux`;
 
   const copyCode = (text: string) => {
     navigator.clipboard.writeText(text);
