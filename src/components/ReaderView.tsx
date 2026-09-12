@@ -387,6 +387,15 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
   // Create highlight
   const handleCreateHighlight = async (color: Highlight['color'], note?: string) => {
     if (!selectedText) return;
+
+    const words = selectedText.trim().split(/\s+/).filter(Boolean).length;
+    let scope: Highlight['scope'] = 'word';
+    if (words > 25 || selectedText.includes('\n\n')) {
+      scope = 'paragraph';
+    } else if (words > 2 || selectedText.includes('.')) {
+      scope = 'line';
+    }
+
     const newHighlight: Highlight = {
       id: 'hl-' + Date.now(),
       bookId: book.id,
@@ -394,7 +403,9 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
       selectedText,
       color,
       note,
+      scope,
       createdAt: Date.now(),
+      updatedAt: Date.now(),
     };
 
     await db.highlights.put(newHighlight);
@@ -529,12 +540,20 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               position: { x: rect.left + rect.width / 2, y: rect.top - 10 },
             });
           }}
-          className={`cursor-pointer rounded-xs px-0.5 transition hover:opacity-85 ${
+          className={`cursor-pointer rounded-xs px-0.5 transition hover:opacity-85 relative inline ${
             highlightColors[h.color] || highlightColors.yellow
           }`}
-          title={h.note ? `Note: ${h.note}` : 'Click to edit highlight'}
+          title={h.note ? `[${h.scope || 'note'}]: ${h.note}` : 'Click to edit highlight'}
         >
           {h.selectedText}
+          {h.note && (
+            <sup
+              className="ml-0.5 inline-flex items-center justify-center px-1 py-0.2 rounded text-[10px] font-sans font-medium select-none bg-amber-500/25 text-amber-500 dark:text-amber-300 border border-amber-500/40 hover:scale-110 transition cursor-pointer"
+              title={`Attached Note: ${h.note}`}
+            >
+              💬
+            </sup>
+          )}
         </mark>
       );
 

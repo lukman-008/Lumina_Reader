@@ -13,7 +13,13 @@
 ## ✨ Key Features
 
 ### 📖 Reading Experience & Typography
-- **Format Support**: Seamlessly import and read **EPUB**, **TXT**, **Markdown (`.md`)**, and **HTML** documents.
+- **Format Support**: Seamlessly import and read **EPUB**, **TXT**, **Markdown (`.md`)**, **HTML**, and extracted text documents.
+- **Deep Search Index (`⌘K`)**: Instant full-text fuzzy and exact search across your entire personal library with chapter jumping and highlighted matching snippets.
+- **Batch File Importer**: Drag-and-drop or select multiple EPUBs, Markdown files, or paste raw web articles directly into custom bookshelves with auto-tagging.
+- **Cross-Device Progress Sync**: Peer-to-peer and code-based progress synchronization allowing you to transfer your reading position, percentages, and annotations across machines without third-party servers.
+- **Comprehensive Annotation Manager (`⌘+Shift+A`)**: Dedicated central workspace to search, filter by color or scope (word, sentence, paragraph), edit notes, and export study summaries to Markdown.
+- **Targeted Selection Notes**: Select any word, line, or paragraph while reading to highlight with custom palettes (Gold, Mint, Sky, Rose, Orange, Purple) and attach contextual reflection notes.
+- **Flexible Library Layout**: Switch effortlessly between visual 3D book cover cards and high-density tabular list view with sorting by Recently Read, Title, Author, Reading Progress, or Word Count.
 - **Curated Font Typography**:
   - **Literata**: Classic digital editorial serif designed for continuous book reading.
   - **Merriweather**: High-contrast, sturdy book face with generous x-height.
@@ -176,6 +182,8 @@ Lumina Reader provides an extensive set of keyboard shortcuts designed for fluid
 | **Toggle Auto-Pacing** | <kbd>P</kbd> |
 | **Open Soundscapes & Warmth** | <kbd>S</kbd> |
 | **Open Reading Habits & Pomodoro** | <kbd>H</kbd> |
+| **Deep Search Index (All Books)** | <kbd>Ctrl+K</kbd> / <kbd>⌘+K</kbd> |
+| **Global Annotation & Notes Manager** | <kbd>Ctrl+Shift+A</kbd> / <kbd>⌘+Shift+A</kbd> |
 | **Bookmark / Unbookmark Page** | <kbd>Ctrl+B</kbd> / <kbd>⌘+B</kbd> |
 | **Search Within Book** | <kbd>Ctrl+F</kbd> / <kbd>⌘+F</kbd> |
 | **Table of Contents** | <kbd>Ctrl+T</kbd> / <kbd>⌘+T</kbd> |
@@ -193,15 +201,22 @@ lumina-reader/
 ├── src/
 │   ├── components/         # Modular React UI components
 │   │   ├── AIAssistantDrawer.tsx       # AI book analysis & Q&A drawer
+│   │   ├── AnnotationManagerModal.tsx  # Central highlights & study notes organizer
+│   │   ├── BackupRestoreModal.tsx      # .lumina complete database export/import
+│   │   ├── DesktopExportModal.tsx      # Tauri/Electron desktop build guide
 │   │   ├── DesktopTitleBar.tsx         # Cross-platform desktop window frame
+│   │   ├── FileImporterModal.tsx       # Multi-format drag-and-drop batch importer
 │   │   ├── HighlightPopover.tsx        # Floating in-text annotation popover
 │   │   ├── LibraryView.tsx             # Home book library, shelves & importer
 │   │   ├── ReaderDrawers.tsx           # Table of contents & Notebook drawer
 │   │   ├── ReaderView.tsx              # Primary reading canvas & viewport
 │   │   ├── ReadingHabitsDashboard.tsx  # Habits, streaks & Pomodoro timer
 │   │   ├── ReadingProgressBar.tsx      # Scrubbable chapter progress bar
+│   │   ├── ReadingProgressSyncModal.tsx# Cross-device sync code & backup transfer
 │   │   ├── RSVPModal.tsx               # Speed reading engine
-│   │   ├── SelectionPopup.tsx          # Quick highlight & text-action popup
+│   │   ├── SearchIndexModal.tsx        # Library-wide deep search index launcher
+│   │   ├── SelectionPopup.tsx          # Quick highlight, note & text-action popup
+│   │   ├── ShortcutsModal.tsx          # Interactive keyboard shortcuts reference
 │   │   ├── SoundscapeModal.tsx         # Synthesized ambient audio generator
 │   │   ├── TTSAudioBar.tsx             # Offline speech player
 │   │   └── TypographyToolbar.tsx       # Font & theme customizer
@@ -210,6 +225,8 @@ lumina-reader/
 │   │   ├── bookParser.ts               # EPUB, Markdown, TXT & HTML parsers
 │   │   ├── db.ts                       # Dexie IndexedDB schemas & persistent settings
 │   │   ├── habitTracker.ts             # Reading session & analytics tracker
+│   │   ├── progressSyncService.ts      # Reading progress sync & code engine
+│   │   ├── searchIndexService.ts       # Full-text inverted search index
 │   │   └── ttsService.ts               # Offline Web Speech API service
 │   ├── App.tsx             # Root view coordinator & state orchestrator
 │   ├── index.css           # Tailwind CSS directives & font definitions

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Highlighter,
   MessageSquare,
@@ -7,6 +7,7 @@ import {
   Copy,
   Check,
   X,
+  FileEdit,
 } from 'lucide-react';
 import type { Highlight } from '../types';
 
@@ -14,7 +15,7 @@ interface SelectionPopupProps {
   position: { x: number; y: number } | null;
   selectedText: string;
   onHighlight: (color: Highlight['color'], note?: string) => void;
-  onAddNote: () => void;
+  onAddNote?: () => void;
   onReadAloud: () => void;
   onAskAI: () => void;
   onClose: () => void;
@@ -42,6 +43,19 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
   const [noteInput, setNoteInput] = useState('');
   const [selectedColor, setSelectedColor] = useState<Highlight['color']>('yellow');
 
+  // Detect selection scope automatically
+  const selectionScope = useMemo(() => {
+    const trimmed = selectedText.trim();
+    const words = trimmed.split(/\s+/).filter(Boolean).length;
+    if (words <= 2 && !trimmed.includes('\n')) {
+      return { type: 'word' as const, label: 'Word Note' };
+    }
+    if (words <= 25 && !trimmed.includes('\n\n')) {
+      return { type: 'line' as const, label: 'Line / Sentence Note' };
+    }
+    return { type: 'paragraph' as const, label: 'Paragraph Note' };
+  }, [selectedText]);
+
   if (!position || !selectedText.trim()) return null;
 
   const copySelection = () => {
@@ -56,50 +70,69 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
     setNoteInput('');
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveWithNote();
+    }
+  };
+
   return (
     <div
       style={{
-        left: `${Math.max(10, Math.min(position.x - 150, window.innerWidth - 340))}px`,
-        top: `${Math.max(10, position.y - (isAddingNote ? 110 : 52))}px`,
+        left: `${Math.max(10, Math.min(position.x - 160, window.innerWidth - 360))}px`,
+        top: `${Math.max(10, position.y - (isAddingNote ? 140 : 54))}px`,
       }}
       className="fixed z-50 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-slate-700/90 shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 select-none text-slate-200 text-xs"
     >
       {isAddingNote ? (
-        <div className="w-72 p-2 space-y-2">
+        <div className="w-80 p-2.5 space-y-2">
           <div className="flex items-center justify-between text-[11px] font-medium text-slate-300">
-            <span>Add Note to Highlight</span>
+            <div className="flex items-center gap-1.5">
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                {selectionScope.label}
+              </span>
+            </div>
             <div className="flex items-center gap-1">
               {COLORS.map((c) => (
                 <button
                   key={c.id}
                   onClick={() => setSelectedColor(c.id)}
-                  className={`w-3.5 h-3.5 rounded-full ${c.bg} transition ${
+                  className={`w-3.5 h-3.5 rounded-full ${c.bg} transition cursor-pointer ${
                     selectedColor === c.id ? `ring-2 ${c.ring} scale-110` : 'opacity-60 hover:opacity-100'
                   }`}
+                  title={c.label}
                 />
               ))}
             </div>
           </div>
+
           <textarea
             value={noteInput}
             onChange={(e) => setNoteInput(e.target.value)}
-            placeholder="Type your reflection..."
+            onKeyDown={handleKeyDown}
+            placeholder={`Add reflection to this ${selectionScope.type}... (Cmd+Enter to save)`}
             autoFocus
-            className="w-full h-14 p-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-amber-500 resize-none font-sans"
+            rows={3}
+            className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-amber-500 resize-none font-sans"
           />
-          <div className="flex justify-end gap-1.5">
-            <button
-              onClick={() => setIsAddingNote(false)}
-              className="px-2 py-1 rounded-md text-[11px] text-slate-400 hover:text-white"
-            >
-              Back
-            </button>
-            <button
-              onClick={handleSaveWithNote}
-              className="px-3 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-[11px]"
-            >
-              Highlight & Save Note
-            </button>
+
+          <div className="flex items-center justify-between pt-0.5">
+            <span className="text-[10px] text-slate-500 font-mono">⌘+Enter to save</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setIsAddingNote(false)}
+                className="px-2.5 py-1 rounded-md text-[11px] text-slate-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveWithNote}
+                className="px-3 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-[11px] cursor-pointer shadow-xs"
+              >
+                Save Note
+              </button>
+            </div>
           </div>
         </div>
       ) : (
@@ -116,13 +149,14 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
             ))}
           </div>
 
-          {/* Add note toggle */}
+          {/* Add Note Button with Scope Preview */}
           <button
             onClick={() => setIsAddingNote(true)}
-            className="p-1.5 rounded-lg text-slate-300 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer"
-            title="Highlight with Note"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-slate-300 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer font-medium text-[11px]"
+            title={`Attach note to selected ${selectionScope.type}`}
           >
-            <MessageSquare className="w-3.5 h-3.5" />
+            <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
+            <span>Note</span>
           </button>
 
           {/* Read aloud action */}
@@ -157,3 +191,4 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
     </div>
   );
 };
+

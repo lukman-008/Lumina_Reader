@@ -21,6 +21,8 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
     { key: 'P', desc: 'Toggle Auto-Pacing / Auto-Scroll' },
     { key: 'S', desc: 'Atmospheric Soundscapes & Circadian Warmth' },
     { key: 'H', desc: 'Reading Habits, Velocity & Pomodoro Dashboard' },
+    { key: `${modKey} + K`, desc: 'Search Index across all books & chapters' },
+    { key: `${modKey} + Shift + A`, desc: 'Open All Highlights & Annotations Manager' },
     { key: `${modKey} + B`, desc: 'Toggle Bookmark on current page' },
     { key: `${modKey} + F`, desc: 'Search text inside current book' },
     { key: `${modKey} + T`, desc: 'Open Table of Contents drawer' },

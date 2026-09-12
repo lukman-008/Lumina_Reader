@@ -113,9 +113,17 @@ export const HighlightPopover: React.FC<HighlightPopoverProps> = ({
       </div>
 
       {/* Quote Preview */}
-      <p className="italic font-serif text-[11px] text-slate-300 line-clamp-2 leading-relaxed bg-slate-950/60 p-2 rounded-lg border border-slate-800">
-        "{highlight.selectedText}"
-      </p>
+      <div className="space-y-1">
+        <div className="flex items-center justify-between text-[10px] text-slate-400">
+          <span className="uppercase tracking-wider font-mono text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-amber-300">
+            {highlight.scope || (highlight.selectedText.trim().split(/\s+/).length <= 2 ? 'word note' : highlight.selectedText.trim().split(/\s+/).length <= 25 ? 'line note' : 'paragraph note')}
+          </span>
+          <span>{highlight.selectedText.trim().split(/\s+/).filter(Boolean).length} words</span>
+        </div>
+        <p className="italic font-serif text-[11px] text-slate-300 line-clamp-3 leading-relaxed bg-slate-950/60 p-2 rounded-lg border border-slate-800">
+          "{highlight.selectedText}"
+        </p>
+      </div>
 
       {/* Note Section */}
       <div>
@@ -124,23 +132,32 @@ export const HighlightPopover: React.FC<HighlightPopoverProps> = ({
             <textarea
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
-              placeholder="Type your reflection or notes..."
+              onKeyDown={(e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSaveNote();
+                }
+              }}
+              placeholder="Type your reflection or notes... (Cmd+Enter to save)"
               autoFocus
-              className="w-full h-16 p-2 rounded-lg bg-slate-950 border border-slate-700 text-xs focus:outline-none focus:border-amber-500 text-slate-200 resize-none font-sans"
+              className="w-full h-18 p-2 rounded-lg bg-slate-950 border border-slate-700 text-xs focus:outline-none focus:border-amber-500 text-slate-200 resize-none font-sans"
             />
-            <div className="flex justify-end gap-1.5">
-              <button
-                onClick={() => setIsEditingNote(false)}
-                className="px-2 py-1 rounded-md text-[11px] text-slate-400 hover:text-white"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveNote}
-                className="px-2.5 py-1 rounded-md bg-amber-500 text-slate-950 font-semibold text-[11px] hover:bg-amber-400"
-              >
-                Save
-              </button>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-slate-500 font-mono">⌘+Enter</span>
+              <div className="flex justify-end gap-1.5">
+                <button
+                  onClick={() => setIsEditingNote(false)}
+                  className="px-2 py-1 rounded-md text-[11px] text-slate-400 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveNote}
+                  className="px-2.5 py-1 rounded-md bg-amber-500 text-slate-950 font-semibold text-[11px] hover:bg-amber-400 cursor-pointer shadow-xs"
+                >
+                  Save Note
+                </button>
+              </div>
             </div>
           </div>
         ) : (

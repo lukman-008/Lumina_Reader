@@ -24,7 +24,9 @@ export interface Highlight {
   selectedText: string;
   color: 'yellow' | 'emerald' | 'sky' | 'rose' | 'amber' | 'violet';
   note?: string;
+  scope?: 'word' | 'line' | 'paragraph';
   createdAt: number;
+  updatedAt?: number;
 }
 
 export interface Bookmark {
@@ -144,3 +146,47 @@ export interface ReadingSessionStats {
 }
 
 export type OSPlatform = 'windows' | 'macos' | 'linux' | 'other';
+
+export interface SearchIndexResult {
+  bookId: string;
+  bookTitle: string;
+  bookAuthor: string;
+  chapterIndex: number;
+  chapterTitle: string;
+  matchSnippet: string;
+  matchIndex: number;
+  matchTerm: string;
+}
+
+export interface ReadingProgressSyncPayload {
+  version: number;
+  deviceId: string;
+  deviceName: string;
+  timestamp: number;
+  booksProgress: {
+    bookId: string;
+    title: string;
+    currentChapterIndex: number;
+    currentPageIndex: number;
+    percentage: number;
+    lastReadTimestamp: number;
+  }[];
+  highlights: Highlight[];
+  bookmarks: Bookmark[];
+  habitStatsSummary?: {
+    currentStreak: number;
+    totalMinutes: number;
+    totalWordsRead: number;
+  };
+}
+
+export interface ImportQueueItem {
+  id: string;
+  file: File;
+  name: string;
+  size: number;
+  format: 'epub' | 'pdf' | 'txt' | 'md' | 'other';
+  status: 'pending' | 'parsing' | 'success' | 'error';
+  parsedBook?: Book;
+  errorMessage?: string;
+}

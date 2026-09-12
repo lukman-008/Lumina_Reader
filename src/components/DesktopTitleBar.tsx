@@ -13,6 +13,8 @@ import {
   Terminal,
   Flame,
   CloudRain,
+  Search,
+  Highlighter,
 } from 'lucide-react';
 import { usePlatform } from '../hooks/usePlatform';
 import { usePWAInstall } from '../hooks/usePWAInstall';
@@ -28,6 +30,8 @@ interface DesktopTitleBarProps {
   onOpenAI?: () => void;
   onOpenHabits?: () => void;
   onOpenSoundscape?: () => void;
+  onOpenSearchIndex?: () => void;
+  onOpenAnnotationManager?: () => void;
 }
 
 export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
@@ -40,6 +44,8 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
   onOpenAI,
   onOpenHabits,
   onOpenSoundscape,
+  onOpenSearchIndex,
+  onOpenAnnotationManager,
 }) => {
   const { platform, isStandalone } = usePlatform();
   const { isInstallable, install } = usePWAInstall();
@@ -162,6 +168,31 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
           >
             <Download className="w-3 h-3" />
             <span className="hidden md:inline">Install Desktop</span>
+          </button>
+        )}
+
+        {/* Global Deep Search Index Launcher */}
+        {onOpenSearchIndex && (
+          <button
+            onClick={onOpenSearchIndex}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition cursor-pointer"
+            title="Search Index across entire library (⌘K)"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <kbd className="hidden lg:inline text-[10px] bg-slate-900 px-1 py-0.5 rounded text-slate-400 font-mono">
+              ⌘K
+            </kbd>
+          </button>
+        )}
+
+        {/* Global Annotations & Notes Manager Launcher */}
+        {onOpenAnnotationManager && (
+          <button
+            onClick={onOpenAnnotationManager}
+            className="p-1.5 rounded-md text-slate-400 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer"
+            title="Annotation & Notes Manager"
+          >
+            <Highlighter className="w-3.5 h-3.5" />
           </button>
         )}
 

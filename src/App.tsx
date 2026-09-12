@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { db, loadSavedSettings, saveReaderSettings } from './services/db';
 import { initializeDatabaseWithSeed } from './services/bookParser';
-import type { Book, ReaderSettings } from './types';
+import type { Book, Shelf, ReaderSettings } from './types';
 import { DesktopTitleBar } from './components/DesktopTitleBar';
 import { LibraryView } from './components/LibraryView';
 import { ReaderView } from './components/ReaderView';
@@ -9,10 +9,15 @@ import { ShortcutsModal } from './components/ShortcutsModal';
 import { DesktopExportModal } from './components/DesktopExportModal';
 import { ReadingHabitsDashboard } from './components/ReadingHabitsDashboard';
 import { SoundscapeModal } from './components/SoundscapeModal';
+import { SearchIndexModal } from './components/SearchIndexModal';
+import { FileImporterModal } from './components/FileImporterModal';
+import { ReadingProgressSyncModal } from './components/ReadingProgressSyncModal';
+import { AnnotationManagerModal } from './components/AnnotationManagerModal';
 import { WifiOff } from 'lucide-react';
 
 export default function App() {
   const [books, setBooks] = useState<Book[]>([]);
+  const [shelves, setShelves] = useState<Shelf[]>([]);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [settings, setSettings] = useState<ReaderSettings | null>(null);
   const [isZenMode, setIsZenMode] = useState(false);
@@ -20,6 +25,10 @@ export default function App() {
   const [isExportGuideOpen, setIsExportGuideOpen] = useState(false);
   const [isHabitsGlobalOpen, setIsHabitsGlobalOpen] = useState(false);
   const [isSoundscapeGlobalOpen, setIsSoundscapeGlobalOpen] = useState(false);
+  const [isSearchIndexOpen, setIsSearchIndexOpen] = useState(false);
+  const [isFileImporterOpen, setIsFileImporterOpen] = useState(false);
+  const [isProgressSyncOpen, setIsProgressSyncOpen] = useState(false);
+  const [isAnnotationManagerOpen, setIsAnnotationManagerOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
@@ -32,6 +41,9 @@ export default function App() {
 
       const savedSettings = await loadSavedSettings();
       setSettings(savedSettings);
+
+      const loadedShelves = await db.shelves.toArray();
+      setShelves(loadedShelves);
     };
 
     initApp();
@@ -51,6 +63,8 @@ export default function App() {
   const refreshBooks = async () => {
     const all = await db.books.toArray();
     setBooks(all);
+    const allShelves = await db.shelves.toArray();
+    setShelves(allShelves);
     if (selectedBook) {
       const refreshedSelected = all.find((b) => b.id === selectedBook.id);
       if (refreshedSelected) setSelectedBook(refreshedSelected);
@@ -63,6 +77,62 @@ export default function App() {
     setSettings(updated);
     await saveReaderSettings(updated);
   };
+
+  // Global keyboard shortcuts (Cmd+K for Deep Search, Cmd+Shift+A for Annotations)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + K: Search Index
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchIndexOpen((prev) => !prev);
+      }
+      // Cmd/Ctrl + Shift + A: Annotation Manager
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setIsAnnotationManagerOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Jump directly to a book and chapter from Deep Search or Annotations
+  const handleNavigateToResult = useCallback(
+    async (bookId: string, chapterIndex: number, _snippetOrText?: string) => {
+      const targetBook = books.find((b) => b.id === bookId);
+      if (targetBook) {
+        const clampedIndex = Math.min(
+          Math.max(0, chapterIndex),
+          Math.max(0, targetBook.chapters.length - 1)
+        );
+        const percentage = Math.round(
+          ((clampedIndex + 1) / Math.max(1, targetBook.chapters.length)) * 100
+        );
+
+        const updatedProgress = {
+          currentChapterIndex: clampedIndex,
+          scrollOffset: 0,
+          percentage,
+          lastReadTimestamp: Date.now(),
+          totalReadTimeSeconds: targetBook.readingProgress?.totalReadTimeSeconds || 0,
+          readingVelocityWPM: targetBook.readingProgress?.readingVelocityWPM || 250,
+        };
+
+        const updatedBook: Book = {
+          ...targetBook,
+          readingProgress: updatedProgress,
+        };
+
+        await db.books.put(updatedBook);
+        setSelectedBook(updatedBook);
+        setIsSearchIndexOpen(false);
+        setIsAnnotationManagerOpen(false);
+        refreshBooks();
+      }
+    },
+    [books]
+  );
 
   // Fullscreen toggle
   const toggleFullscreen = () => {
@@ -95,6 +165,8 @@ export default function App() {
         onOpenExportGuide={() => setIsExportGuideOpen(true)}
         onOpenHabits={() => setIsHabitsGlobalOpen(true)}
         onOpenSoundscape={() => setIsSoundscapeGlobalOpen(true)}
+        onOpenSearchIndex={() => setIsSearchIndexOpen(true)}
+        onOpenAnnotationManager={() => setIsAnnotationManagerOpen(true)}
         isOnline={isOnline}
       />
 
@@ -120,8 +192,48 @@ export default function App() {
           onOpenExportGuide={() => setIsExportGuideOpen(true)}
           settings={settings}
           onUpdateSettings={handleUpdateSettings}
+          onOpenSearchIndex={() => setIsSearchIndexOpen(true)}
+          onOpenFileImporter={() => setIsFileImporterOpen(true)}
+          onOpenSyncModal={() => setIsProgressSyncOpen(true)}
+          onOpenAnnotationManager={() => setIsAnnotationManagerOpen(true)}
         />
       )}
+
+      {/* Search Index Modal (Full-Text Search across library) */}
+      <SearchIndexModal
+        isOpen={isSearchIndexOpen}
+        onClose={() => setIsSearchIndexOpen(false)}
+        books={books}
+        currentBook={selectedBook}
+        onNavigateToResult={handleNavigateToResult}
+      />
+
+      {/* File Importer Modal (Batch EPUB, PDF, MD, TXT & Web Paste) */}
+      <FileImporterModal
+        isOpen={isFileImporterOpen}
+        onClose={() => setIsFileImporterOpen(false)}
+        shelves={shelves}
+        onBooksImported={refreshBooks}
+      />
+
+      {/* Reading Progress & Annotation Sync Modal (JSON/Code cross-device) */}
+      <ReadingProgressSyncModal
+        isOpen={isProgressSyncOpen}
+        onClose={() => setIsProgressSyncOpen(false)}
+        onSyncCompleted={refreshBooks}
+      />
+
+      {/* Global Annotation & Notes Manager Modal */}
+      <AnnotationManagerModal
+        isOpen={isAnnotationManagerOpen}
+        onClose={() => setIsAnnotationManagerOpen(false)}
+        books={books}
+        currentBook={selectedBook}
+        onNavigateToHighlight={(bookId, chapterIndex, text) =>
+          handleNavigateToResult(bookId, chapterIndex, text)
+        }
+        onRefreshData={refreshBooks}
+      />
 
       {/* Keyboard Shortcuts Cheatsheet Modal */}
       <ShortcutsModal

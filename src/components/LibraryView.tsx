@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   BookOpen,
   Plus,
@@ -22,6 +22,12 @@ import {
   X,
   Layers,
   ChevronRight,
+  LayoutGrid,
+  List as ListIcon,
+  ArrowUpDown,
+  RefreshCw,
+  Highlighter,
+  FileUp,
 } from 'lucide-react';
 import type { Book, Shelf, ReaderSettings } from '../types';
 import { parseUploadedBook, estimateReadingTimeMinutes } from '../services/bookParser';
@@ -37,6 +43,10 @@ interface LibraryViewProps {
   onOpenExportGuide: () => void;
   settings?: ReaderSettings;
   onUpdateSettings?: (newSettings: Partial<ReaderSettings>) => void;
+  onOpenSearchIndex?: () => void;
+  onOpenFileImporter?: () => void;
+  onOpenSyncModal?: () => void;
+  onOpenAnnotationManager?: () => void;
 }
 
 export const LibraryView: React.FC<LibraryViewProps> = ({
@@ -46,12 +56,18 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   onOpenExportGuide,
   settings,
   onUpdateSettings,
+  onOpenSearchIndex,
+  onOpenFileImporter,
+  onOpenSyncModal,
+  onOpenAnnotationManager,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<string>('all'); // 'all' | 'reading' | 'favorites' | 'finished' | shelf.id
   const [shelves, setShelves] = useState<Shelf[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [sortBy, setSortBy] = useState<'recent' | 'title' | 'author' | 'progress' | 'words'>('recent');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Bulk actions state
@@ -103,6 +119,32 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     // Specific shelf
     return book.shelfId === activeTab;
   });
+
+  // Sort filtered books
+  const sortedBooks = useMemo(() => {
+    return [...filteredBooks].sort((a, b) => {
+      if (sortBy === 'recent') {
+        const timeA = a.readingProgress?.lastReadTimestamp || a.addedAt || 0;
+        const timeB = b.readingProgress?.lastReadTimestamp || b.addedAt || 0;
+        return timeB - timeA;
+      }
+      if (sortBy === 'title') {
+        return a.title.localeCompare(b.title);
+      }
+      if (sortBy === 'author') {
+        return a.author.localeCompare(b.author);
+      }
+      if (sortBy === 'progress') {
+        const progA = a.readingProgress?.percentage || 0;
+        const progB = b.readingProgress?.percentage || 0;
+        return progB - progA;
+      }
+      if (sortBy === 'words') {
+        return b.totalWords - a.totalWords;
+      }
+      return 0;
+    });
+  }, [filteredBooks, sortBy]);
 
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -252,7 +294,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const totalReadingHours = (totalWords / (220 * 60)).toFixed(1);
 
   return (
-    <div className="min-h-[calc(100vh-2.75rem)] bg-slate-950 text-slate-100 p-6 sm:p-8 pb-28 sm:pb-36 max-w-7xl mx-auto flex flex-col space-y-8 animate-in fade-in duration-200">
+    <div className="w-full flex-1 min-h-[calc(100vh-2.75rem)] bg-slate-950 text-slate-100 p-6 sm:p-8 pb-36 sm:pb-44 max-w-7xl mx-auto flex flex-col space-y-8 animate-in fade-in duration-200">
       {/* Top Banner / Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Books Volume */}
@@ -329,7 +371,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       </div>
 
       {/* Library Controls Bar */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
         {/* Search Input */}
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -342,8 +384,47 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           />
         </div>
 
-        {/* Right action group */}
-        <div className="flex items-center gap-2">
+        {/* Action Group */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Deep Search Index Modal Launcher */}
+          {onOpenSearchIndex && (
+            <button
+              onClick={onOpenSearchIndex}
+              className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-slate-300 hover:text-amber-400 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Full-Text Deep Search across all books (Ctrl/Cmd+K)"
+            >
+              <Search className="w-3.5 h-3.5 text-amber-400" />
+              <span>Deep Search</span>
+              <kbd className="hidden sm:inline px-1 py-0.5 rounded bg-slate-800 text-[10px] text-slate-400 font-mono">
+                ⌘K
+              </kbd>
+            </button>
+          )}
+
+          {/* Reading Progress Sync Modal Launcher */}
+          {onOpenSyncModal && (
+            <button
+              onClick={onOpenSyncModal}
+              className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-sky-500/50 text-slate-300 hover:text-sky-400 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Sync reading positions & highlights across devices"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-sky-400" />
+              <span>Sync Progress</span>
+            </button>
+          )}
+
+          {/* Annotation & Notes Manager Launcher */}
+          {onOpenAnnotationManager && (
+            <button
+              onClick={onOpenAnnotationManager}
+              className="px-3 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/50 text-slate-300 hover:text-amber-300 text-xs font-medium transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="View, search, edit & export all highlights and notes"
+            >
+              <Highlighter className="w-3.5 h-3.5 text-amber-400" />
+              <span>Annotations</span>
+            </button>
+          )}
+
           {/* Bulk Selection Mode Toggle */}
           <button
             onClick={() => {
@@ -357,19 +438,19 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             }`}
           >
             <CheckSquare className="w-3.5 h-3.5" />
-            <span>{isBulkMode ? 'Done Selecting' : 'Select Books'}</span>
+            <span>{isBulkMode ? 'Done Selecting' : 'Select'}</span>
           </button>
 
           {/* Backup Button */}
           <button
             onClick={() => setIsBackupModalOpen(true)}
-            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition"
+            className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition cursor-pointer"
             title="Backup & Restore Library (.lumina)"
           >
             <Database className="w-4 h-4" />
           </button>
 
-          {/* Import Action */}
+          {/* File Importer Launcher */}
           <input
             ref={fileInputRef}
             type="file"
@@ -379,12 +460,19 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             className="hidden"
           />
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => {
+              if (onOpenFileImporter) {
+                onOpenFileImporter();
+              } else {
+                fileInputRef.current?.click();
+              }
+            }}
             disabled={isImporting}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-semibold shadow-lg shadow-amber-500/10 transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-semibold shadow-lg shadow-amber-500/10 transition cursor-pointer"
+            title="Import EPUB, TXT, MD, PDF or Web Articles"
           >
-            <Plus className="w-4 h-4" />
-            <span>{isImporting ? 'Importing...' : 'Import Book'}</span>
+            <FileUp className="w-4 h-4" />
+            <span>{isImporting ? 'Importing...' : 'File Importer'}</span>
           </button>
         </div>
       </div>
@@ -483,6 +571,64 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </button>
       </div>
 
+      {/* Layout Toolbar: View Mode & Sort Dropdown */}
+      <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+        <div className="flex items-center gap-2">
+          <span>
+            Showing <strong className="text-slate-200">{sortedBooks.length}</strong> books
+          </span>
+          {activeTab !== 'all' && (
+            <span className="px-2 py-0.5 rounded-md bg-slate-800 text-[11px] text-amber-400 font-medium">
+              Filtered
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Sort selector */}
+          <div className="flex items-center gap-1.5">
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 text-xs focus:outline-none cursor-pointer"
+            >
+              <option value="recent">Recently Read</option>
+              <option value="title">Title (A-Z)</option>
+              <option value="author">Author (A-Z)</option>
+              <option value="progress">Progress (%)</option>
+              <option value="words">Length (Word Count)</option>
+            </select>
+          </div>
+
+          {/* Grid vs List View Mode Switcher */}
+          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-md transition cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-amber-500/20 text-amber-400 font-semibold'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Grid View"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-md transition cursor-pointer ${
+                viewMode === 'list'
+                  ? 'bg-amber-500/20 text-amber-400 font-semibold'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+              title="Compact List View"
+            >
+              <ListIcon className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Floating Bulk Actions Bar when 1+ books are selected */}
       {isBulkMode && (
         <div className="p-3 rounded-2xl bg-slate-900 border border-amber-500/40 shadow-2xl flex flex-wrap items-center justify-between gap-3 animate-in slide-in-from-top-2">
@@ -577,18 +723,19 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
       </div>
 
-      {/* Books Shelf Grid */}
-      {filteredBooks.length === 0 ? (
+      {/* Books Shelf Grid or Compact List */}
+      {sortedBooks.length === 0 ? (
         <div className="py-16 text-center text-slate-500 text-sm space-y-2">
           <BookOpen className="w-8 h-8 mx-auto opacity-40 text-slate-400" />
           <p>No books found in this shelf or search filter.</p>
         </div>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {filteredBooks.map((book) => {
+          {sortedBooks.map((book) => {
             const progress = book.readingProgress?.percentage || 0;
             const estMinutes = estimateReadingTimeMinutes(book.totalWords);
             const isSelected = selectedBookIds.has(book.id);
+            const shelfObj = shelves.find((s) => s.id === book.shelfId);
 
             return (
               <div
@@ -638,6 +785,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                       <span className="px-2 py-0.5 rounded-md bg-black/40 backdrop-blur-md text-[10px] font-mono font-semibold uppercase tracking-wider text-amber-300 border border-white/10">
                         {book.format}
                       </span>
+                      {shelfObj && (
+                        <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 text-[10px] border border-amber-500/30 font-medium">
+                          {shelfObj.name}
+                        </span>
+                      )}
                     </div>
 
                     <button
@@ -723,15 +875,148 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             );
           })}
         </div>
+      ) : (
+        /* Compact List / Table View */
+        <div className="space-y-2">
+          {sortedBooks.map((book) => {
+            const progress = book.readingProgress?.percentage || 0;
+            const estMinutes = estimateReadingTimeMinutes(book.totalWords);
+            const isSelected = selectedBookIds.has(book.id);
+            const shelfObj = shelves.find((s) => s.id === book.shelfId);
+
+            return (
+              <div
+                key={book.id}
+                onClick={() => {
+                  if (isBulkMode) {
+                    setSelectedBookIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(book.id)) next.delete(book.id);
+                      else next.add(book.id);
+                      return next;
+                    });
+                  } else {
+                    onSelectBook(book);
+                  }
+                }}
+                className={`group flex items-center justify-between p-3 rounded-2xl bg-slate-900 border transition cursor-pointer hover:border-slate-700 ${
+                  isSelected
+                    ? 'border-amber-500 ring-2 ring-amber-500/40 bg-slate-900/90'
+                    : 'border-slate-800'
+                }`}
+              >
+                {/* Left: Checkbox + Mini Cover Thumbnail + Title/Author */}
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {isBulkMode && (
+                    <div
+                      onClick={(e) => handleToggleSelectBook(e, book.id)}
+                      className="p-1 rounded-md text-amber-400 hover:text-amber-300"
+                    >
+                      {isSelected ? (
+                        <CheckSquare className="w-4 h-4 fill-amber-500 text-slate-950" />
+                      ) : (
+                        <Square className="w-4 h-4 text-slate-400" />
+                      )}
+                    </div>
+                  )}
+
+                  {/* Thumbnail Cover */}
+                  <div
+                    className={`w-10 h-14 shrink-0 rounded-lg bg-gradient-to-br ${
+                      book.coverGradient || 'from-slate-800 to-slate-950'
+                    } p-1 flex flex-col justify-between border border-white/10 shadow-sm relative overflow-hidden`}
+                  >
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-black/30" />
+                    <span className="text-[8px] font-mono text-amber-300 font-bold uppercase pl-1">
+                      {book.format}
+                    </span>
+                    <div className="pl-1">
+                      <div className="w-4 h-0.5 bg-white/40 rounded-full" />
+                    </div>
+                  </div>
+
+                  {/* Book Info */}
+                  <div className="min-w-0 flex-1 pr-4">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-medium text-sm text-slate-100 group-hover:text-amber-400 transition truncate">
+                        {book.title}
+                      </h4>
+                      {shelfObj && (
+                        <span className="hidden sm:inline px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-300 text-[10px] border border-amber-500/20 font-medium shrink-0">
+                          {shelfObj.name}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
+                      <span>{book.author}</span>
+                      <span className="text-slate-600">•</span>
+                      <span>{book.totalWords.toLocaleString()} words</span>
+                      <span className="text-slate-600 hidden md:inline">•</span>
+                      <span className="hidden md:inline">~{estMinutes} min read</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Center / Right: Progress Bar & Actions */}
+                <div className="flex items-center gap-4 shrink-0">
+                  {/* Progress info */}
+                  <div className="w-24 sm:w-32 hidden sm:block">
+                    <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                      <span>{progress}%</span>
+                      <span>{progress === 100 ? 'Finished' : progress > 0 ? 'In Progress' : 'Unread'}</span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                      <div
+                        style={{ width: `${progress}%` }}
+                        className="h-full bg-amber-500 rounded-full"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Favorite Star */}
+                  <button
+                    onClick={(e) => handleToggleFavorite(e, book)}
+                    className="p-1.5 text-slate-400 hover:text-amber-400 rounded-lg hover:bg-slate-800 transition"
+                    title={book.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <Star
+                      className={`w-4 h-4 ${
+                        book.isFavorite ? 'fill-amber-400 text-amber-400' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {/* Read / Resume button */}
+                  <button
+                    onClick={() => onSelectBook(book)}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span className="hidden md:inline">{progress > 0 ? 'Resume' : 'Read'}</span>
+                  </button>
+
+                  {/* Delete button */}
+                  <button
+                    onClick={(e) => handleDeleteBook(e, book.id)}
+                    className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition"
+                    title="Delete book"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
       {/* Bottom Library Summary & Navigation Controls */}
-      {filteredBooks.length > 0 && (
+      {sortedBooks.length > 0 && (
         <footer className="pt-6 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-2">
             <HardDrive className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
             <span>
-              Showing {filteredBooks.length} of {books.length} {books.length === 1 ? 'title' : 'titles'} · 100% offline Dexie database
+              Showing {sortedBooks.length} of {books.length} {books.length === 1 ? 'title' : 'titles'} · 100% offline Dexie database
             </span>
           </div>
 
