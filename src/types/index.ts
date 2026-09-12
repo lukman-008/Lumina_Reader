@@ -67,6 +67,7 @@ export interface Book {
   isFavorite?: boolean;
   shelfId?: string;
   tags?: string[];
+  rawFile?: ArrayBuffer;
 }
 
 export interface ReaderSettings {

@@ -74,9 +74,84 @@ export async function parseUploadedBook(file: File): Promise<Book> {
 
       for (let i = 1; i <= numPages; i++) {
         const page = await pdf.getPage(i);
+        
+        // 1. Extract text
         const content = await page.getTextContent();
-        const strings = content.items.map((item: any) => item.str);
-        extractedText += strings.join(' ') + '\n\n';
+        let pageText = '';
+        let lastY = -1;
+        
+        // Sort items vertically (top to bottom) then horizontally (left to right)
+        // PDF coordinate system: origin (0,0) is bottom-left, so higher Y is higher on page.
+        const items = content.items.sort((a: any, b: any) => {
+          if (!a.transform || !b.transform) return 0;
+          if (Math.abs(b.transform[5] - a.transform[5]) > 5) {
+            return b.transform[5] - a.transform[5];
+          }
+          return a.transform[4] - b.transform[4];
+        });
+
+        for (const itemAny of items) {
+          const item = itemAny as any;
+          if (!item.str || !item.transform) continue;
+          
+          const y = item.transform[5];
+          if (lastY !== -1 && Math.abs(lastY - y) > 12) {
+             pageText += '\n';
+          } else if (lastY !== -1 && Math.abs(lastY - y) <= 12) {
+             pageText += ' ';
+          }
+          pageText += item.str;
+          lastY = y;
+        }
+        
+        extractedText += pageText + '\n\n';
+
+        // 2. Extract XObject Images
+        try {
+          const opList = await page.getOperatorList();
+          for (let j = 0; j < opList.fnArray.length; j++) {
+            if (opList.fnArray[j] === pdfjsLib.OPS.paintImageXObject) {
+              const imgName = opList.argsArray[j][0];
+              const img = await page.objs.get(imgName) as any;
+              
+              if (img && img.width && img.height && img.data) {
+                // Ensure image isn't a tiny icon or massive background to save memory
+                if (img.width < 50 || img.height < 50) continue;
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                if (ctx) {
+                  const imgData = ctx.createImageData(img.width, img.height);
+                  const len = img.data.length;
+                  const pixels = img.width * img.height;
+                  
+                  if (len === pixels * 4) { // RGBA
+                    imgData.data.set(img.data);
+                  } else if (len === pixels * 3) { // RGB
+                    for(let k = 0, l = 0; k < len; k += 3, l += 4) {
+                      imgData.data[l] = img.data[k];
+                      imgData.data[l+1] = img.data[k+1];
+                      imgData.data[l+2] = img.data[k+2];
+                      imgData.data[l+3] = 255;
+                    }
+                  } else if (img.kind === 1 || len === pixels) { // Grayscale
+                    for(let k = 0, l = 0; k < len; k++, l += 4) {
+                      imgData.data[l] = imgData.data[l+1] = imgData.data[l+2] = img.data[k];
+                      imgData.data[l+3] = 255;
+                    }
+                  }
+                  ctx.putImageData(imgData, 0, 0);
+                  const dataUri = canvas.toDataURL('image/jpeg', 0.85);
+                  extractedText += `\n\n![Extracted PDF Image](${dataUri})\n\n`;
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.warn('PDF Image extraction skipped for page', i, e);
+        }
       }
     } catch (err) {
       console.error('PDF parsing error:', err);
@@ -84,7 +159,7 @@ export async function parseUploadedBook(file: File): Promise<Book> {
     }
 
     // Cleanup excessive whitespace while preserving paragraphs
-    extractedText = extractedText.replace(/ +/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+    extractedText = extractedText.replace(/ {2,}/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
 
     if (extractedText.length < 50) {
       extractedText = `[Document: ${file.name}]\n\nThis PDF document might contain scanned images instead of text, or could not be parsed correctly.`;
@@ -103,6 +178,7 @@ export async function parseUploadedBook(file: File): Promise<Book> {
       coverGradient: randomGradient,
       chapters,
       category: 'PDF Documents',
+      rawFile: arrayBuffer,
       addedAt: Date.now(),
       readingProgress: {
         currentChapterIndex: 0,
@@ -217,54 +293,107 @@ async function parseEpubFile(file: File, title: string, gradient: string): Promi
 }
 
 function splitIntoChapters(fullText: string, defaultTitle: string): BookChapter[] {
-  // Regex to look for "Chapter 1", "CHAPTER I", "Section 1", "Act I", "# Chapter"
-  const chapterRegex = /(?:\n\s*(?:Chapter|CHAPTER|Section|SECTION|Part|PART|Book|BOOK)\s+[0-9IVXLCDMivxlcdm]+[^\n]*|\n#{1,3}\s+[^\n]+)/g;
+  // Normalize newlines to ensure consistent paragraph blocks
+  const normalizedText = fullText.replace(/\n{3,}/g, '\n\n').trim();
+  const paragraphs = normalizedText.split('\n\n');
   
-  const matches = [...fullText.matchAll(chapterRegex)];
+  const chapters: BookChapter[] = [];
+  let currentChapterTitle = defaultTitle;
+  let currentChapterContent: string[] = [];
+  let wordsSinceLastBreak = 0;
   
-  if (!matches || matches.length < 2) {
-    // If no explicit chapter breaks found, split intelligently every ~2,500 words for optimal desktop paging
-    const words = fullText.split(/\s+/);
-    const wordsPerChapter = 2200;
-    const chapters: BookChapter[] = [];
+  // Heuristic to detect headings
+  const isHeading = (p: string) => {
+    // Ignore images
+    if (p.startsWith('![')) return false;
+    // Explicit markdown heading
+    if (p.startsWith('#')) return true;
     
-    for (let i = 0; i < words.length; i += wordsPerChapter) {
-      const chunk = words.slice(i, i + wordsPerChapter).join(' ');
-      const chapterNumber = Math.floor(i / wordsPerChapter) + 1;
-      chapters.push({
-        id: `ch-${chapterNumber}`,
-        title: `${defaultTitle} — Part ${chapterNumber}`,
-        content: chunk,
-        wordCount: countWords(chunk),
-      });
+    const len = p.length;
+    if (len < 3 || len > 100) return false;
+    
+    // Most headings don't end in typical sentence-ending punctuation
+    if (/[.,:;!?]$/.test(p)) return false;
+    
+    // Check if it's all uppercase (and contains at least one letter)
+    const isUppercase = p === p.toUpperCase() && /[A-Z]/.test(p);
+    
+    // Check if it's Title Case (roughly)
+    const isTitleCase = /^[A-Z]/.test(p) && !/^[a-z]/.test(p.split(' ')[0]);
+    
+    return isUppercase || isTitleCase;
+  };
+  
+  for (let i = 0; i < paragraphs.length; i++) {
+    const p = paragraphs[i].trim();
+    if (!p) continue;
+    
+    const pWordCount = p.split(/\s+/).length;
+    let isBreak = false;
+    let newTitle = '';
+    
+    // 1. Explicit Markdown headings
+    if (p.match(/^#{1,6}\s+(.+)$/)) {
+      isBreak = true;
+      newTitle = p.replace(/^#{1,6}\s+/, '').trim();
     }
-
-    return chapters.length > 0 ? chapters : [{
+    // 2. Typical Chapter / Part markers
+    else if (p.match(/^(Chapter|Part|Section|Book)\s+[0-9IVXLCDMivxlcdm]+(\s*-:.*)?$/i) && p.length < 100) {
+      isBreak = true;
+      newTitle = p;
+    }
+    // 3. Heuristic heading (only if we've accumulated enough words to avoid breaking every short line)
+    else if (wordsSinceLastBreak > 600 && isHeading(p)) {
+      isBreak = true;
+      newTitle = p;
+    }
+    // 4. Force break if chapter is getting too long and we find a decent candidate
+    else if (wordsSinceLastBreak > 2500 && isHeading(p)) {
+      isBreak = true;
+      newTitle = p;
+    }
+    // 5. Hard force break if chapter is absurdly long to prevent memory/render issues
+    else if (wordsSinceLastBreak > 4500) {
+      isBreak = true;
+      newTitle = `${defaultTitle} — Part ${chapters.length + 2}`;
+    }
+    
+    if (isBreak && currentChapterContent.length > 0) {
+      chapters.push({
+        id: `ch-${chapters.length + 1}`,
+        title: currentChapterTitle,
+        content: currentChapterContent.join('\n\n'),
+        wordCount: countWords(currentChapterContent.join('\n\n')),
+      });
+      currentChapterTitle = newTitle || `Chapter ${chapters.length + 1}`;
+      currentChapterContent = [p];
+      wordsSinceLastBreak = pWordCount;
+    } else {
+      currentChapterContent.push(p);
+      wordsSinceLastBreak += pWordCount;
+    }
+  }
+  
+  // Push the last chapter
+  if (currentChapterContent.length > 0) {
+    chapters.push({
+      id: `ch-${chapters.length + 1}`,
+      title: currentChapterTitle,
+      content: currentChapterContent.join('\n\n'),
+      wordCount: countWords(currentChapterContent.join('\n\n')),
+    });
+  }
+  
+  // Fallback safely if something goes wrong
+  if (chapters.length === 0) {
+    chapters.push({
       id: 'ch-1',
       title: defaultTitle,
       content: fullText,
       wordCount: countWords(fullText),
-    }];
-  }
-
-  const chapters: BookChapter[] = [];
-  
-  for (let i = 0; i < matches.length; i++) {
-    const startIndex = matches[i].index || 0;
-    const endIndex = i + 1 < matches.length ? (matches[i + 1].index || fullText.length) : fullText.length;
-    const chapterRaw = fullText.slice(startIndex, endIndex).trim();
-    const firstLineEnd = chapterRaw.indexOf('\n');
-    const title = firstLineEnd !== -1 ? chapterRaw.slice(0, firstLineEnd).replace(/[#*]/g, '').trim() : `Chapter ${i + 1}`;
-    const content = firstLineEnd !== -1 ? chapterRaw.slice(firstLineEnd).trim() : chapterRaw;
-
-    chapters.push({
-      id: `ch-${i + 1}`,
-      title: title || `Chapter ${i + 1}`,
-      content: content || chapterRaw,
-      wordCount: countWords(content),
     });
   }
-
+  
   return chapters;
 }
 

@@ -35,6 +35,7 @@ import { TTSAudioBar } from './TTSAudioBar';
 import { RSVPModal } from './RSVPModal';
 import { SoundscapeModal } from './SoundscapeModal';
 import { ReadingHabitsDashboard } from './ReadingHabitsDashboard';
+import { NativePdfReader } from './NativePdfReader';
 
 interface ReaderViewProps {
   book: Book;
@@ -116,14 +117,19 @@ const FONT_CLASSES: Record<ReaderSettings['fontFamily'], string> = {
   mono: 'font-mono-reader',
 };
 
-export const ReaderView: React.FC<ReaderViewProps> = ({
-  book,
-  onBackToLibrary,
-  settings,
-  onUpdateSettings,
-  isZenMode,
-  onToggleZenMode,
-}) => {
+export const ReaderView: React.FC<ReaderViewProps> = (props) => {
+  if (props.book.format === 'pdf') {
+    return <NativePdfReader {...props} />;
+  }
+
+  const {
+    book,
+    onBackToLibrary,
+    settings,
+    onUpdateSettings,
+    isZenMode,
+    onToggleZenMode,
+  } = props;
   const [currentChapterIndex, setCurrentChapterIndex] = useState(
     book.readingProgress.currentChapterIndex || 0
   );
@@ -595,6 +601,53 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
     return results;
   }, [searchQuery, book.chapters]);
 
+  const renderParagraphBlock = (p: string, idx: number) => {
+    // 1. Markdown Images
+    const imgMatch = p.match(/^!\[(.*?)\]\((.*?)\)$/);
+    if (imgMatch) {
+      return (
+        <div key={idx} className="my-8 flex justify-center w-full">
+          <img 
+            src={imgMatch[2]} 
+            alt={imgMatch[1]} 
+            className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-lg border border-slate-700/50 bg-slate-800/50 p-1"
+          />
+        </div>
+      );
+    }
+    
+    // 2. Markdown Headings
+    const headingMatch = p.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const content = headingMatch[2];
+      
+      const sizes = [
+        'text-3xl font-bold mt-12 mb-6', 
+        'text-2xl font-bold mt-10 mb-5',
+        'text-xl font-bold mt-8 mb-4',
+        'text-lg font-semibold mt-6 mb-3',
+        'text-base font-semibold mt-4 mb-2',
+        'text-base font-medium mt-4 mb-2 uppercase tracking-wide'
+      ];
+      const className = sizes[level - 1] || sizes[0];
+      const HeadingTag = `h${level}` as any;
+      
+      return (
+        <HeadingTag key={idx} className={`${className} font-sans leading-tight`}>
+          {renderParagraphContent(content)}
+        </HeadingTag>
+      );
+    }
+    
+    // 3. Normal Paragraph
+    return (
+      <p key={idx} className="indent-6">
+        {renderParagraphContent(p)}
+      </p>
+    );
+  };
+
   return (
     <div
       ref={containerRef}
@@ -1043,37 +1096,21 @@ export const ReaderView: React.FC<ReaderViewProps> = ({
               <div className="space-y-4">
                 {activePageParagraphs
                   .slice(0, Math.ceil(activePageParagraphs.length / 2))
-                  .map((p, idx) => (
-                    <p key={idx} className="indent-6">
-                      {renderParagraphContent(p)}
-                    </p>
-                  ))}
+                  .map((p, idx) => renderParagraphBlock(p, idx))}
               </div>
               <div className="space-y-4 md:border-l md:border-current/10 md:pl-12">
                 {activePageParagraphs
                   .slice(Math.ceil(activePageParagraphs.length / 2))
-                  .map((p, idx) => (
-                    <p key={idx} className="indent-6">
-                      {renderParagraphContent(p)}
-                    </p>
-                  ))}
+                  .map((p, idx) => renderParagraphBlock(p, idx + Math.ceil(activePageParagraphs.length / 2)))}
               </div>
             </div>
           ) : settings.layoutMode === 'scroll' ? (
             <div className="space-y-5 leading-relaxed">
-              {currentChapter.content.split('\n\n').map((p, idx) => (
-                <p key={idx} className="indent-6">
-                  {renderParagraphContent(p)}
-                </p>
-              ))}
+              {currentChapter.content.split('\n\n').map((p, idx) => renderParagraphBlock(p, idx))}
             </div>
           ) : (
             <div className="space-y-5 leading-relaxed">
-              {activePageParagraphs.map((p, idx) => (
-                <p key={idx} className="indent-6">
-                  {renderParagraphContent(p)}
-                </p>
-              ))}
+              {activePageParagraphs.map((p, idx) => renderParagraphBlock(p, idx))}
             </div>
           )}
         </article>

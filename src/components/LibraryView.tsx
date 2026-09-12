@@ -74,6 +74,8 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [isBulkMode, setIsBulkMode] = useState(false);
   const [selectedBookIds, setSelectedBookIds] = useState<Set<string>>(new Set());
   const [bulkTagInput, setBulkTagInput] = useState('');
+  const [bookToDelete, setBookToDelete] = useState<string | null>(null);
+  const [shelfToDelete, setShelfToDelete] = useState<string | null>(null);
   const [isBulkTagModalOpen, setIsBulkTagModalOpen] = useState(false);
   const [isBulkShelfModalOpen, setIsBulkShelfModalOpen] = useState(false);
 
@@ -168,12 +170,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   const handleDeleteBook = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (confirm('Remove this book from your offline library?')) {
-      await db.books.delete(id);
-      await db.highlights.where('bookId').equals(id).delete();
-      await db.bookmarks.where('bookId').equals(id).delete();
-      onRefreshBooks();
-    }
+    setBookToDelete(id);
   };
 
   const handleToggleFavorite = async (e: React.MouseEvent, book: Book) => {
@@ -200,17 +197,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   };
 
   const handleDeleteShelf = async (shelfId: string) => {
-    if (confirm('Delete this shelf? (Books on this shelf will remain in your library)')) {
-      await db.shelves.delete(shelfId);
-      // Remove shelfId from books
-      const onShelf = books.filter((b) => b.shelfId === shelfId);
-      for (const b of onShelf) {
-        await db.books.update(b.id, { shelfId: undefined });
-      }
-      setShelves((prev) => prev.filter((s) => s.id !== shelfId));
-      if (activeTab === shelfId) setActiveTab('all');
-      onRefreshBooks();
-    }
+    setShelfToDelete(shelfId);
   };
 
   // Bulk selection logic
@@ -278,22 +265,50 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
     onRefreshBooks();
   };
 
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
   const handleBulkDelete = async () => {
-    if (confirm(`Remove ${selectedBookIds.size} selected books from your library?`)) {
-      for (const id of selectedBookIds) {
-        await db.books.delete(id);
-        await db.highlights.where('bookId').equals(id).delete();
-        await db.bookmarks.where('bookId').equals(id).delete();
-      }
-      setSelectedBookIds(new Set());
-      setIsBulkMode(false);
-      onRefreshBooks();
-    }
+    setShowBulkDeleteConfirm(true);
   };
 
   // Stats calculation
   const totalWords = books.reduce((acc, b) => acc + (b.totalWords || 0), 0);
   const totalReadingHours = (totalWords / (220 * 60)).toFixed(1);
+
+  // Confirmation action execution
+  const confirmDeleteBook = async () => {
+    if (!bookToDelete) return;
+    await db.books.delete(bookToDelete);
+    await db.highlights.where('bookId').equals(bookToDelete).delete();
+    await db.bookmarks.where('bookId').equals(bookToDelete).delete();
+    setBookToDelete(null);
+    onRefreshBooks();
+  };
+
+  const confirmDeleteShelf = async () => {
+    if (!shelfToDelete) return;
+    await db.shelves.delete(shelfToDelete);
+    const onShelf = books.filter((b) => b.shelfId === shelfToDelete);
+    for (const b of onShelf) {
+      await db.books.update(b.id, { shelfId: undefined });
+    }
+    setShelves((prev) => prev.filter((s) => s.id !== shelfToDelete));
+    if (activeTab === shelfToDelete) setActiveTab('all');
+    setShelfToDelete(null);
+    onRefreshBooks();
+  };
+
+  const confirmBulkDelete = async () => {
+    for (const id of selectedBookIds) {
+      await db.books.delete(id);
+      await db.highlights.where('bookId').equals(id).delete();
+      await db.bookmarks.where('bookId').equals(id).delete();
+    }
+    setSelectedBookIds(new Set());
+    setIsBulkMode(false);
+    setShowBulkDeleteConfirm(false);
+    onRefreshBooks();
+  };
 
   return (
     <div className="w-full flex-1 min-h-[calc(100vh-2.75rem)] bg-slate-950 text-slate-100 p-6 sm:p-8 pb-36 sm:pb-44 max-w-7xl mx-auto flex flex-col space-y-8 animate-in fade-in duration-200">
@@ -1151,6 +1166,84 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-semibold"
               >
                 Apply Tag
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirm Delete Book Modal */}
+      {bookToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 p-5 shadow-2xl space-y-4">
+            <h3 className="font-semibold text-slate-100">Remove from Library?</h3>
+            <p className="text-xs text-slate-400">
+              This action will permanently delete the book, highlights, and bookmarks from your offline library.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setBookToDelete(null)}
+                className="px-4 py-2 rounded-lg text-xs text-slate-400 hover:text-white bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteBook}
+                className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-400 text-white text-xs font-semibold"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirm Delete Shelf Modal */}
+      {shelfToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 p-5 shadow-2xl space-y-4">
+            <h3 className="font-semibold text-slate-100">Delete Shelf?</h3>
+            <p className="text-xs text-slate-400">
+              Books on this shelf will remain in your library, but the shelf itself will be deleted.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShelfToDelete(null)}
+                className="px-4 py-2 rounded-lg text-xs text-slate-400 hover:text-white bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteShelf}
+                className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-400 text-white text-xs font-semibold"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirm Bulk Delete Modal */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 p-5 shadow-2xl space-y-4">
+            <h3 className="font-semibold text-slate-100">Remove {selectedBookIds.size} Books?</h3>
+            <p className="text-xs text-slate-400">
+              This action will permanently delete these books, their highlights, and bookmarks from your library.
+            </p>
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowBulkDeleteConfirm(false)}
+                className="px-4 py-2 rounded-lg text-xs text-slate-400 hover:text-white bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmBulkDelete}
+                className="px-4 py-2 rounded-lg bg-rose-500 hover:bg-rose-400 text-white text-xs font-semibold"
+              >
+                Delete All
               </button>
             </div>
           </div>
