@@ -12,7 +12,13 @@ function createWindow() {
     height: 850,
     minWidth: 800,
     minHeight: 600,
-    titleBarStyle: 'hiddenInset',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: {
+      color: '#020617', // slate-950
+      symbolColor: '#94a3b8', // slate-400
+      height: 44, // matches h-11 (44px)
+    },
+    autoHideMenuBar: true,
     backgroundColor: '#020617',
     webPreferences: {
       nodeIntegration: false,

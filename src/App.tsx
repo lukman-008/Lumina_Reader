@@ -60,14 +60,20 @@ export default function App() {
     };
   }, []);
 
-  const refreshBooks = async () => {
-    const all = await db.books.toArray();
-    setBooks(all);
-    const allShelves = await db.shelves.toArray();
-    setShelves(allShelves);
-    if (selectedBook) {
-      const refreshedSelected = all.find((b) => b.id === selectedBook.id);
-      if (refreshedSelected) setSelectedBook(refreshedSelected);
+  const refreshBooks = async (forceClearSelection = false) => {
+    try {
+      const all = await db.books.toArray();
+      setBooks(all);
+      const allShelves = await db.shelves.toArray();
+      setShelves(allShelves);
+      
+      // If we aren't explicitly clearing the selection, and one is currently active in the state closure, refresh it.
+      if (!forceClearSelection && selectedBook) {
+        const refreshedSelected = all.find((b) => b.id === selectedBook.id);
+        if (refreshedSelected) setSelectedBook(refreshedSelected);
+      }
+    } catch (err) {
+      console.warn('Failed to load library:', err);
     }
   };
 
@@ -168,6 +174,11 @@ export default function App() {
         onOpenSearchIndex={() => setIsSearchIndexOpen(true)}
         onOpenAnnotationManager={() => setIsAnnotationManagerOpen(true)}
         isOnline={isOnline}
+        onNavigateHome={() => {
+          setSelectedBook(null);
+          setIsZenMode(false);
+          refreshBooks(true);
+        }}
       />
 
       {/* Main View: Library or Reader */}
@@ -177,7 +188,7 @@ export default function App() {
           onBackToLibrary={() => {
             setSelectedBook(null);
             setIsZenMode(false);
-            refreshBooks();
+            refreshBooks(true);
           }}
           settings={settings}
           onUpdateSettings={handleUpdateSettings}

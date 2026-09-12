@@ -2,7 +2,11 @@
   "name": "lumina-reader",
   "productName": "Lumina Reader",
   "description": "Cross-platform minimalist distraction-free book reader",
-  "author": "Lumina Team",
+  "author": {
+    "name": "Lumina Team",
+    "email": "support@lumina.local"
+  },
+  "homepage": "https://lumina.local",
   "main": "electron/main.cjs",
   "private": true,
   "version": "1.0.0",
@@ -42,8 +46,7 @@
     },
     "linux": {
       "target": [
-        "AppImage",
-        "deb"
+        "AppImage"
       ],
       "category": "Office"
     }

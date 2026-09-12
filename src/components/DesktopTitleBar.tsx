@@ -32,6 +32,7 @@ interface DesktopTitleBarProps {
   onOpenSoundscape?: () => void;
   onOpenSearchIndex?: () => void;
   onOpenAnnotationManager?: () => void;
+  onNavigateHome?: () => void;
 }
 
 export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
@@ -46,6 +47,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
   onOpenSoundscape,
   onOpenSearchIndex,
   onOpenAnnotationManager,
+  onNavigateHome,
 }) => {
   const { platform, isStandalone } = usePlatform();
   const { isInstallable, install } = usePWAInstall();
@@ -62,17 +64,28 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
   if (isZenMode) return null;
 
   return (
-    <header className="h-11 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-3 flex items-center justify-between select-none z-30 shrink-0 sticky top-0">
+    <header 
+      className="h-11 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-3 flex items-center justify-between select-none z-30 shrink-0 sticky top-0"
+      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+    >
       {/* Left: Window identity & App branding */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {/* Native Mac style traffic dots aesthetic when on desktop */}
         <div className="flex items-center gap-1.5 pr-1">
-          <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-400 cursor-pointer" title="Close" />
+          <span 
+            onClick={onNavigateHome}
+            className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-400 cursor-pointer transition-colors" 
+            title="Close / Back to Library" 
+          />
           <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 hover:bg-amber-400 cursor-pointer" title="Minimize" />
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 hover:bg-emerald-400 cursor-pointer" title="Expand" />
         </div>
 
-        <div className="flex items-center gap-2">
+        <div 
+          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={onNavigateHome}
+          title="Back to Library"
+        >
           <div className="w-6 h-6 rounded-md bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center text-slate-950 font-bold shadow-xs">
             <BookOpen className="w-3.5 h-3.5 text-slate-950" />
           </div>
@@ -92,7 +105,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
       </div>
 
       {/* Center: Current book title if reading */}
-      <div className="max-w-[35%] truncate text-center">
+      <div className="max-w-[35%] truncate text-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {currentBookTitle ? (
           <span className="text-xs font-medium text-slate-300 tracking-wide">
             {currentBookTitle}
@@ -103,7 +116,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
       </div>
 
       {/* Right: Quick desktop controls */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {/* Offline / Online indicator */}
         <div
           className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
@@ -222,6 +235,9 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         >
           {isZenMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
         </button>
+
+        {/* Windows native control spacer (prevents overlap with titleBarOverlay) */}
+        {platform === 'windows' && <div className="w-[140px] shrink-0" />}
       </div>
     </header>
   );
