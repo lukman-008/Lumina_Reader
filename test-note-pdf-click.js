@@ -9,16 +9,15 @@ import puppeteer from 'puppeteer';
   
   const books = await page.$$('.group.relative.flex');
   if (books.length > 0) {
-    await books[1].click(); // click EPUB
-    await new Promise(r => setTimeout(r, 2000));
+    await books[0].click(); // click PDF
+    await new Promise(r => setTimeout(r, 4000));
     
     // Select text
     await page.evaluate(() => {
-      const p = document.querySelector('.reading-content p');
+      const p = document.querySelector('.react-pdf__Page__textContent span');
       if (p) {
         const range = document.createRange();
-        range.setStart(p.firstChild, 0);
-        range.setEnd(p.firstChild, 15);
+        range.selectNodeContents(p);
         const sel = window.getSelection();
         sel.removeAllRanges();
         sel.addRange(range);
@@ -36,7 +35,7 @@ import puppeteer from 'puppeteer';
       
       const textarea = await page.$('textarea');
       if (textarea) {
-        await textarea.type('My test note');
+        await textarea.type('My test note on PDF');
         await new Promise(r => setTimeout(r, 500));
         
         const saveBtn = await page.evaluateHandle(() => Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Save')));
@@ -60,8 +59,8 @@ import puppeteer from 'puppeteer';
                 const p = document.querySelector('.fixed.z-50');
                 return p ? p.innerText : null;
              });
-             console.log("POPOVER VISIBLE:", popover !== null);
-             console.log("POPOVER CONTENT:", popover);
+             console.log("POPOVER VISIBLE PDF:", popover !== null);
+             console.log("POPOVER CONTENT PDF:", popover);
            }
         }
       }

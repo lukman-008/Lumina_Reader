@@ -22,7 +22,6 @@ import puppeteer from 'puppeteer';
         const sel = window.getSelection();
         sel.removeAllRanges();
         sel.addRange(range);
-        
         document.dispatchEvent(new MouseEvent('mouseup'));
       }
     });
@@ -36,7 +35,7 @@ import puppeteer from 'puppeteer';
       
       const textarea = await page.$('textarea');
       if (textarea) {
-        await textarea.type('My test note');
+        await textarea.type('My test note to view');
         await new Promise(r => setTimeout(r, 500));
         
         const saveBtn = await page.evaluateHandle(() => Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Save')));
@@ -44,25 +43,44 @@ import puppeteer from 'puppeteer';
            await saveBtn.click();
            await new Promise(r => setTimeout(r, 1000));
            
-           // Click the mark
-           const markClicked = await page.evaluate(() => {
+           // Check if mark is rendered with title
+           const markData = await page.evaluate(() => {
              const m = document.querySelector('mark');
-             if (m) {
-                m.click();
-                return true;
-             }
-             return false;
+             if (!m) return null;
+             return {
+                title: m.getAttribute('title'),
+                html: m.outerHTML,
+                text: m.innerText
+             };
            });
            
-           if (markClicked) {
-             await new Promise(r => setTimeout(r, 1000));
-             const popover = await page.evaluate(() => {
-                const p = document.querySelector('.fixed.z-50');
-                return p ? p.innerText : null;
-             });
-             console.log("POPOVER VISIBLE:", popover !== null);
-             console.log("POPOVER CONTENT:", popover);
-           }
+           console.log("MARK DATA:", markData);
+           
+           // Click it
+           await page.evaluate(() => {
+             const m = document.querySelector('mark');
+             if (m) {
+                const rect = m.getBoundingClientRect();
+                m.dispatchEvent(new MouseEvent('click', {
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: rect.left + rect.width / 2,
+                  clientY: rect.top + rect.height / 2
+                }));
+             }
+           });
+           
+           await new Promise(r => setTimeout(r, 1000));
+           
+           const popoverData = await page.evaluate(() => {
+              const p = document.querySelector('.fixed.z-50');
+              if (!p) return null;
+              return {
+                 html: p.outerHTML,
+                 text: p.innerText
+              };
+           });
+           console.log("POPOVER AFTER CLICK:", popoverData);
         }
       }
     }

@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Book, ReaderSettings } from '../types';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Book, ReaderSettings, Highlight } from '../types';
 import { db } from '../services/db';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Settings, List, X, Square, Columns2, ScrollText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Minimize2, Settings, List, X, Square, Columns2, ScrollText } from 'lucide-react';
 import { SelectionPopup } from './SelectionPopup';
+import { HighlightPopover } from './HighlightPopover';
 import { AIAssistantDrawer } from './AIAssistantDrawer';
 import { ttsService } from '../services/ttsService';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -48,6 +49,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const [isAIOpen, setIsAIOpen] = useState<boolean>(false);
   const [pdfInstance, setPdfInstance] = useState<any>(null);
   const [highlights, setHighlights] = useState<any[]>([]);
+  const [activeHighlightPopover, setActiveHighlightPopover] = useState<{ highlight: any, position: {x: number, y: number} } | null>(null);
 
   useEffect(() => {
     if (!fileData) return;
@@ -147,6 +149,12 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     } else if (e.key === 'ArrowLeft') {
       e.preventDefault();
       changePage(-1);
+    } else if (e.key === 'Escape') {
+      if (isZenMode) onToggleZenMode();
+      setIsTOCOpen(false);
+      setIsAIOpen(false);
+    } else if (e.key === 'z' || e.key === 'Z') {
+      onToggleZenMode();
     }
   };
 
@@ -172,7 +180,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     violet: 'background-color: rgba(192, 132, 252, 0.4); border-bottom: 2px solid rgba(192, 132, 252, 0.9); color: inherit;',
   };
 
-  const customTextRenderer = (textItem: any) => {
+  const customTextRenderer = useCallback((textItem: any) => {
     const { str, itemIndex } = textItem;
     // pageIndex isn't directly in textItem, but textItem is bound per page if we wanted.
     // Actually, we can just use the fact that itemIndex is unique per page.
@@ -204,17 +212,17 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
            const before = str.slice(0, h.startOffset);
            const marked = str.slice(h.startOffset, h.endOffset);
            const after = str.slice(h.endOffset);
-           result = `${before}<mark style="${style}">${marked}</mark>${after}`;
+           result = `${before}<mark data-highlight-id="${h.id}" class="pdf-highlight-mark cursor-pointer transition hover:opacity-85" style="${style}">${marked}${h.note ? `<sup style="margin-left: 2px; padding: 0 4px; font-size: 10px; background: rgba(245,158,11,0.25); color: #d97706; border-radius: 4px; border: 1px solid rgba(245,158,11,0.4);">💬</sup>` : ''}</mark>${after}`;
         } else if (itemIndex === h.startItemIndex) {
            const before = str.slice(0, h.startOffset);
            const marked = str.slice(h.startOffset);
-           result = `${before}<mark style="${style}">${marked}</mark>`;
+           result = `${before}<mark data-highlight-id="${h.id}" class="pdf-highlight-mark cursor-pointer transition hover:opacity-85" style="${style}">${marked}${h.note ? `<sup style="margin-left: 2px; padding: 0 4px; font-size: 10px; background: rgba(245,158,11,0.25); color: #d97706; border-radius: 4px; border: 1px solid rgba(245,158,11,0.4);">💬</sup>` : ''}</mark>`;
         } else if (itemIndex === h.endItemIndex) {
            const marked = str.slice(0, h.endOffset);
            const after = str.slice(h.endOffset);
-           result = `<mark style="${style}">${marked}</mark>${after}`;
+           result = `<mark data-highlight-id="${h.id}" class="pdf-highlight-mark cursor-pointer transition hover:opacity-85" style="${style}">${marked}${h.note ? `<sup style="margin-left: 2px; padding: 0 4px; font-size: 10px; background: rgba(245,158,11,0.25); color: #d97706; border-radius: 4px; border: 1px solid rgba(245,158,11,0.4);">💬</sup>` : ''}</mark>${after}`;
         } else if (itemIndex > h.startItemIndex && itemIndex < h.endItemIndex) {
-           result = `<mark style="${style}">${str}</mark>`;
+           result = `<mark data-highlight-id="${h.id}" class="pdf-highlight-mark cursor-pointer transition hover:opacity-85" style="${style}">${str}${h.note ? `<sup style="margin-left: 2px; padding: 0 4px; font-size: 10px; background: rgba(245,158,11,0.25); color: #d97706; border-radius: 4px; border: 1px solid rgba(245,158,11,0.4);">💬</sup>` : ''}</mark>`;
         }
       } else {
         // Fallback for old highlights without itemIndex
@@ -222,7 +230,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
           const style = highlightColors[h.color] || highlightColors.yellow;
           result = result.replace(
             h.selectedText,
-            `<mark style="${style}">${h.selectedText}</mark>`
+            `<mark data-highlight-id="${h.id}" class="pdf-highlight-mark cursor-pointer transition hover:opacity-85" style="${style}">${h.selectedText}${h.note ? `<sup style="margin-left: 2px; padding: 0 4px; font-size: 10px; background: rgba(245,158,11,0.25); color: #d97706; border-radius: 4px; border: 1px solid rgba(245,158,11,0.4);">💬</sup>` : ''}</mark>`
           );
         }
       }
@@ -230,7 +238,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     
     // Always wrap in a span with data-item-index so we can extract it during selection!
     return `<span data-pdf-item-index="${itemIndex}">${result}</span>`;
-  };
+  }, [highlights]);
 
   // Listen for text selection completion (mouseup/touchend) instead of selectionchange 
   // to avoid re-rendering the DOM while the user is actively dragging, which destroys the selection.
@@ -295,11 +303,34 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   }, []);
 
 
+
+  // Listen for clicks on PDF highlight marks
+  useEffect(() => {
+    const handleMarkClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const mark = target.closest('mark.pdf-highlight-mark');
+      if (mark) {
+        const id = mark.getAttribute('data-highlight-id');
+        const h = highlights.find(x => x.id === id);
+        if (h) {
+          const rect = mark.getBoundingClientRect();
+          setActiveHighlightPopover({
+            highlight: h,
+            position: { x: rect.left + rect.width / 2, y: rect.top - 10 }
+          });
+        }
+      }
+    };
+    document.addEventListener('click', handleMarkClick);
+    return () => document.removeEventListener('click', handleMarkClick);
+  }, [highlights]);
+
   // Close popup if clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest('.fixed.z-50')) {
+      if (!target.closest('.fixed.z-50') && !target.closest('mark.pdf-highlight-mark')) {
+        setActiveHighlightPopover(null);
         // Wait for browser to process the click/tap and potentially clear selection
         setTimeout(() => {
           const selection = window.getSelection();
@@ -342,6 +373,23 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     onUpdateSettings({ layoutMode: nextMode });
   };
 
+  
+  const handleUpdateHighlight = async (id: string, updates: any) => {
+    await db.highlights.update(id, updates);
+    setHighlights((prev) => prev.map((h) => (h.id === id ? { ...h, ...updates } : h)));
+    if (activeHighlightPopover && activeHighlightPopover.highlight.id === id) {
+      setActiveHighlightPopover({
+        ...activeHighlightPopover,
+        highlight: { ...activeHighlightPopover.highlight, ...updates },
+      });
+    }
+  };
+
+  const handleDeleteHighlight = async (id: string) => {
+    await db.highlights.delete(id);
+    setHighlights((prev) => prev.filter((h) => h.id !== id));
+    setActiveHighlightPopover(null);
+  };
   const handleCreateHighlight = async (color: string, note?: string) => {
     if (!selectedText) return;
     
@@ -350,6 +398,11 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
       bookId: book.id,
       chapterIndex: pageNumber - 1,
       selectedText,
+      startItemIndex: selectionOffsets?.startItemIndex,
+      startOffset: selectionOffsets?.startOffset,
+      endItemIndex: selectionOffsets?.endItemIndex,
+      endOffset: selectionOffsets?.endOffset,
+      pdfPageIndex: selectionOffsets?.pageIndex,
       color: color as any,
       note,
       createdAt: Date.now(),
@@ -363,6 +416,20 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   return (
     <div className={`w-full flex flex-col transition-colors duration-200 relative overflow-hidden ${themeStyle.bg} ${themeStyle.text} ${isZenMode ? 'h-screen' : 'h-[calc(100vh-2.75rem)]'}`}>
       
+      {/* Zen Mode / Full Screen Exit Overlay */}
+      {isZenMode && (
+        <div className="fixed top-4 right-4 z-50 transition-opacity duration-300 opacity-30 hover:opacity-100">
+          <button
+            onClick={onToggleZenMode}
+            className="flex items-center gap-2 px-3 py-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700/50 backdrop-blur-md shadow-lg cursor-pointer"
+            title="Exit Zen Mode (Esc)"
+          >
+            <Minimize2 className="w-4 h-4 text-slate-400" />
+            <span className="text-xs font-medium">Exit Fullscreen <kbd className="ml-1 opacity-60 font-sans">Esc</kbd></span>
+          </button>
+        </div>
+      )}
+
       {/* Top Nav Bar */}
       {!isZenMode && (
         <nav
@@ -559,6 +626,20 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
         onClose={() => setSelectionPosition(null)}
       />
 
+      {activeHighlightPopover && (
+        <HighlightPopover
+          highlight={activeHighlightPopover.highlight}
+          position={activeHighlightPopover.position}
+          onClose={() => setActiveHighlightPopover(null)}
+          onUpdateHighlight={handleUpdateHighlight}
+          onDeleteHighlight={handleDeleteHighlight}
+          onAskAI={(text) => {
+            setSelectedText(text);
+            setIsAIOpen(true);
+            setActiveHighlightPopover(null);
+          }}
+        />
+      )}
       <AIAssistantDrawer
         isOpen={isAIOpen}
         onClose={() => setIsAIOpen(false)}

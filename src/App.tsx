@@ -176,12 +176,42 @@ export default function App() {
   );
 
   // Fullscreen toggle
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch(() => {});
-    } else {
-      document.exitFullscreen().catch(() => {});
-    }
+  
+  // Sync Zen Mode with native fullscreen state
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setIsZenMode(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  const handleToggleZenMode = () => {
+    setIsZenMode((prev) => {
+      const next = !prev;
+      
+      try {
+        if (next) {
+          if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch(() => {});
+          } else if ((document.documentElement as any).webkitRequestFullscreen) {
+            (document.documentElement as any).webkitRequestFullscreen();
+          }
+        } else {
+          if (document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          } else if ((document as any).webkitExitFullscreen) {
+            (document as any).webkitExitFullscreen();
+          }
+        }
+      } catch (err) {
+        console.warn('Fullscreen API error:', err);
+      }
+      
+      return next;
+    });
   };
 
   if (!settings) {
@@ -201,7 +231,7 @@ export default function App() {
       <DesktopTitleBar
         currentBookTitle={selectedBook ? `${selectedBook.title} — ${selectedBook.author}` : undefined}
         isZenMode={isZenMode}
-        onToggleZenMode={() => setIsZenMode((prev) => !prev)}
+        onToggleZenMode={handleToggleZenMode}
         onOpenShortcuts={() => setIsShortcutsOpen(true)}
         onOpenExportGuide={() => setIsExportGuideOpen(true)}
         onOpenHabits={() => setIsHabitsGlobalOpen(true)}
@@ -228,7 +258,7 @@ export default function App() {
           settings={settings}
           onUpdateSettings={handleUpdateSettings}
           isZenMode={isZenMode}
-          onToggleZenMode={() => setIsZenMode((prev) => !prev)}
+          onToggleZenMode={handleToggleZenMode}
         />
       ) : (
         <LibraryView

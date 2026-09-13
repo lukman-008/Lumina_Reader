@@ -89,7 +89,8 @@ export async function parseUploadedBook(file: File): Promise<Book> {
 
   // Fallback for TXT, MD, and completely unknown formats
   const textDecoder = new TextDecoder('utf-8', { fatal: false });
-  const rawString = textDecoder.decode(arrayBuffer);
+  // Limit to 5MB for parsing unknown text to prevent freezing main thread
+  const rawString = textDecoder.decode(arrayBuffer.byteLength > 5000000 && extension !== 'txt' && extension !== 'md' ? arrayBuffer.slice(0, 5000000) : arrayBuffer);
   let extractedText = '';
 
   if (extension === 'txt' || extension === 'md') {

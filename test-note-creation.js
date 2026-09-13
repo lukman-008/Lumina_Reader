@@ -18,17 +18,19 @@ import puppeteer from 'puppeteer';
       if (p) {
         const range = document.createRange();
         range.setStart(p.firstChild, 0);
-        range.setEnd(p.firstChild, 15);
+        range.setEnd(p.firstChild, 15); // "Sun Tzu said: T"
         const sel = window.getSelection();
         sel.removeAllRanges();
         sel.addRange(range);
         
+        // dispatch mouseup to trigger selection popover
         document.dispatchEvent(new MouseEvent('mouseup'));
       }
     });
     
     await new Promise(r => setTimeout(r, 1000));
     
+    // Click Note button
     const noteBtn = await page.$('button[title^="Attach note"]');
     if (noteBtn) {
       await noteBtn.click();
@@ -39,30 +41,22 @@ import puppeteer from 'puppeteer';
         await textarea.type('My test note');
         await new Promise(r => setTimeout(r, 500));
         
-        const saveBtn = await page.evaluateHandle(() => Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Save')));
+        // Click save
+        const saveBtn = await page.evaluateHandle(() => {
+          return Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('Save'));
+        });
+        
         if (saveBtn) {
            await saveBtn.click();
            await new Promise(r => setTimeout(r, 1000));
            
-           // Click the mark
-           const markClicked = await page.evaluate(() => {
+           // Check if mark is rendered
+           const markHTML = await page.evaluate(() => {
              const m = document.querySelector('mark');
-             if (m) {
-                m.click();
-                return true;
-             }
-             return false;
+             return m ? m.outerHTML : null;
            });
            
-           if (markClicked) {
-             await new Promise(r => setTimeout(r, 1000));
-             const popover = await page.evaluate(() => {
-                const p = document.querySelector('.fixed.z-50');
-                return p ? p.innerText : null;
-             });
-             console.log("POPOVER VISIBLE:", popover !== null);
-             console.log("POPOVER CONTENT:", popover);
-           }
+           console.log("MARK RENDERED:", markHTML);
         }
       }
     }

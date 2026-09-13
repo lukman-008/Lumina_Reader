@@ -434,6 +434,9 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('.fixed.z-50')) {
+        if (!target.closest('mark')) {
+          setActiveHighlightPopover(null);
+        }
         // Wait for browser to process the click/tap and potentially clear selection
         setTimeout(() => {
           const selection = window.getSelection();

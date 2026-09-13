@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Sparkles,
@@ -48,6 +48,11 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
 
   // Vocabulary tab state
   const [wordToExplain, setWordToExplain] = useState(selectedText || '');
+  useEffect(() => {
+    if (selectedText) {
+      setWordToExplain(selectedText);
+    }
+  }, [selectedText]);
   const [vocabResult, setVocabResult] = useState<string | null>(null);
 
   if (!isOpen) return null;
