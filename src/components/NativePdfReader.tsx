@@ -516,9 +516,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
 
       <div 
         ref={containerRef}
-        className={`flex-1 overflow-y-auto overflow-x-hidden w-full flex justify-center pb-24 ${
-          settings.layoutMode === 'scroll' ? 'items-start pt-8' : 'items-center'
-        }`}
+        className={`flex-1 overflow-y-auto overflow-x-hidden w-full flex justify-center pt-8 pb-24 items-start`}
       >
         {!pdfUrl ? (
           <div className="flex flex-col items-center justify-center h-full space-y-4 opacity-50">

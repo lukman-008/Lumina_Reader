@@ -862,7 +862,13 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     {/* Progress Indicator */}
                     <div className="flex items-center justify-between text-[11px] text-slate-400">
                       <span>{progress > 0 ? `${progress}% Completed` : 'Not Started'}</span>
-                      <span>~{estMinutes}m total</span>
+                      <span>
+                        {book.format === 'pdf' 
+                          ? 'PDF Document' 
+                          : estMinutes >= 60 
+                            ? `~${Math.floor(estMinutes / 60)}h ${estMinutes % 60}m` 
+                            : `~${estMinutes}m total`}
+                      </span>
                     </div>
                     <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
                       <div
