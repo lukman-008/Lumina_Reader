@@ -24,7 +24,7 @@ interface AnnotationManagerModalProps {
   onClose: () => void;
   books: Book[];
   currentBook?: Book | null;
-  onNavigateToHighlight?: (bookId: string, chapterIndex: number, text: string) => void;
+  onNavigateToHighlight?: (bookId: string, chapterIndex: number, text: string, highlightId?: string) => void;
   onRefreshData?: () => void;
 }
 
@@ -417,7 +417,7 @@ export const AnnotationManagerModal: React.FC<AnnotationManagerModalProps> = ({
                         {onNavigateToHighlight && (
                           <button
                             onClick={() => {
-                              onNavigateToHighlight(hl.bookId, hl.chapterIndex, hl.selectedText);
+                              onNavigateToHighlight(hl.bookId, hl.chapterIndex, hl.selectedText, hl.id);
                               onClose();
                             }}
                             className="p-1 hover:text-amber-400 rounded transition cursor-pointer"

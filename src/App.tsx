@@ -19,6 +19,7 @@ export default function App() {
   const [books, setBooks] = useState<Book[]>([]);
   const [shelves, setShelves] = useState<Shelf[]>([]);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [targetHighlightId, setTargetHighlightId] = useState<string | null>(null);
   const [settings, setSettings] = useState<ReaderSettings | null>(null);
   const [isZenMode, setIsZenMode] = useState(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
@@ -139,20 +140,31 @@ export default function App() {
   }, []);
 
   // Jump directly to a book and chapter from Deep Search or Annotations
-  const handleNavigateToResult = useCallback(
-    async (bookId: string, chapterIndex: number, _snippetOrText?: string) => {
+const handleNavigateToResult = useCallback(
+    async (bookId: string, chapterIndex: number, _snippetOrText?: string, highlightId?: string) => {
       const targetBook = books.find((b) => b.id === bookId);
       if (targetBook) {
-        const clampedIndex = Math.min(
-          Math.max(0, chapterIndex),
-          Math.max(0, targetBook.chapters.length - 1)
-        );
+        let clampedIndex = chapterIndex;
+        let cPageIdx = 0;
+        
+        if (targetBook.format !== 'pdf') {
+          clampedIndex = Math.min(
+            Math.max(0, chapterIndex),
+            Math.max(0, targetBook.chapters.length - 1)
+          );
+        } else {
+          // For PDFs, chapterIndex is used as the zero-indexed page number in some places
+          cPageIdx = chapterIndex;
+          clampedIndex = chapterIndex;
+        }
+
         const percentage = Math.round(
           ((clampedIndex + 1) / Math.max(1, targetBook.chapters.length)) * 100
         );
 
         const updatedProgress = {
           currentChapterIndex: clampedIndex,
+          currentPageIndex: cPageIdx,
           scrollOffset: 0,
           percentage,
           lastReadTimestamp: Date.now(),
@@ -168,6 +180,7 @@ export default function App() {
         await db.books.put(updatedBook);
         setSelectedBook(updatedBook);
         setIsSearchIndexOpen(false);
+        if (highlightId) setTargetHighlightId(highlightId);
         setIsAnnotationManagerOpen(false);
         refreshBooks();
       }
@@ -259,6 +272,8 @@ export default function App() {
           onUpdateSettings={handleUpdateSettings}
           isZenMode={isZenMode}
           onToggleZenMode={handleToggleZenMode}
+          targetHighlightId={targetHighlightId}
+          onClearTargetHighlight={() => setTargetHighlightId(null)}
         />
       ) : (
         <LibraryView
@@ -319,8 +334,8 @@ export default function App() {
         onClose={() => setIsAnnotationManagerOpen(false)}
         books={books}
         currentBook={selectedBook}
-        onNavigateToHighlight={(bookId, chapterIndex, text) =>
-          handleNavigateToResult(bookId, chapterIndex, text)
+        onNavigateToHighlight={(bookId, chapterIndex, text, highlightId) =>
+          handleNavigateToResult(bookId, chapterIndex, text, highlightId)
         }
         onRefreshData={refreshBooks}
       />

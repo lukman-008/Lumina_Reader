@@ -114,6 +114,7 @@ interface AnnotationsDrawerProps {
   onDeleteHighlight: (id: string) => void;
   onDeleteBookmark: (id: string) => void;
   onJumpToBookmark: (bm: Bookmark) => void;
+  onJumpToHighlight?: (h: Highlight) => void;
   onUpdateBookmark?: (id: string, label: string) => void;
   bookTitle: string;
 }
@@ -126,6 +127,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
   onDeleteHighlight,
   onDeleteBookmark,
   onJumpToBookmark,
+  onJumpToHighlight,
   onUpdateBookmark,
   bookTitle,
 }) => {
@@ -333,7 +335,13 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
               filteredHighlights.map((h) => (
                 <div
                   key={h.id}
-                  className={`p-3 rounded-xl border relative group text-xs leading-relaxed transition ${
+                  onClick={() => {
+                    if (onJumpToHighlight) {
+                      onJumpToHighlight(h);
+                      onClose();
+                    }
+                  }}
+                  className={`p-3 rounded-xl border relative group text-xs leading-relaxed transition cursor-pointer hover:border-amber-500/50 ${
                     COLOR_CLASSES[h.color] || COLOR_CLASSES.yellow
                   }`}
                 >

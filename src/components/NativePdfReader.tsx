@@ -7,6 +7,7 @@ import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Minimi
 import { SelectionPopup } from './SelectionPopup';
 import { HighlightPopover } from './HighlightPopover';
 import { AIAssistantDrawer } from './AIAssistantDrawer';
+import { AnnotationsDrawer } from './ReaderDrawers';
 import { ttsService } from '../services/ttsService';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -21,6 +22,8 @@ interface NativePdfReaderProps {
   onUpdateSettings: (newSettings: Partial<ReaderSettings>) => void;
   isZenMode: boolean;
   onToggleZenMode: () => void;
+  targetHighlightId?: string | null;
+  onClearTargetHighlight?: () => void;
 }
 
 export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
@@ -29,7 +32,9 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   settings,
   onUpdateSettings,
   isZenMode,
-  onToggleZenMode
+  onToggleZenMode,
+  targetHighlightId,
+  onClearTargetHighlight
 }) => {
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
@@ -45,6 +50,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     };
   }, [book.id, book.title]);
 
+  const [zenNavVisible, setZenNavVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(800);
   const [scale, setScale] = useState<number>(1.0);
@@ -53,14 +59,67 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
   const [selectedText, setSelectedText] = useState<string>('');
   const [selectionOffsets, setSelectionOffsets] = useState<{startItemIndex: number, startOffset: number, endItemIndex: number, endOffset: number, pageIndex: number} | null>(null);
-
-  // TOC States
   const [pdfOutline, setPdfOutline] = useState<any[] | null>(null);
   const [isTOCOpen, setIsTOCOpen] = useState<boolean>(false);
+  const [isAnnotationsDrawerOpen, setIsAnnotationsDrawerOpen] = useState(false);
   const [isAIOpen, setIsAIOpen] = useState<boolean>(false);
   const [pdfInstance, setPdfInstance] = useState<any>(null);
   const [highlights, setHighlights] = useState<any[]>([]);
   const [activeHighlightPopover, setActiveHighlightPopover] = useState<{ highlight: any, position: {x: number, y: number} } | null>(null);
+  const [pendingHighlightScrollId, setPendingHighlightScrollId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (targetHighlightId) {
+      setPendingHighlightScrollId(targetHighlightId);
+      if (onClearTargetHighlight) onClearTargetHighlight();
+    }
+  }, [targetHighlightId, onClearTargetHighlight]);
+
+
+  useEffect(() => {
+    if (pendingHighlightScrollId) {
+      const targetHighlight = highlights.find(h => h.id === pendingHighlightScrollId);
+      
+      if (targetHighlight && targetHighlight.pdfPageIndex !== undefined) {
+        // Only jump if it's not currently visible
+        const currentPages = settings.layoutMode === 'double' ? [pageNumber, pageNumber + 1] : [pageNumber];
+        if (!currentPages.includes(targetHighlight.pdfPageIndex)) {
+          // It's not visible, we need to change page!
+          setPageNumber(targetHighlight.pdfPageIndex);
+          // Don't clear pendingHighlightScrollId yet, let it render and find it in the DOM on next effect pass
+          return; 
+        }
+      }
+
+      const el = document.querySelector(`mark[data-highlight-id="${pendingHighlightScrollId}"]`) as HTMLElement;
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const origStyle = el.style.boxShadow;
+        el.style.boxShadow = '0 0 0 4px rgba(245, 158, 11, 0.5)';
+        setTimeout(() => {
+          if (el) el.style.boxShadow = origStyle;
+        }, 1500);
+        setPendingHighlightScrollId(null);
+      } else {
+        const timer = setTimeout(() => {
+          const retryEl = document.querySelector(`mark[data-highlight-id="${pendingHighlightScrollId}"]`) as HTMLElement;
+          if (retryEl) {
+            retryEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            const origStyle = retryEl.style.boxShadow;
+            retryEl.style.boxShadow = '0 0 0 4px rgba(245, 158, 11, 0.5)';
+            setTimeout(() => {
+              if (retryEl) retryEl.style.boxShadow = origStyle;
+            }, 1500);
+            setPendingHighlightScrollId(null);
+          }
+        }, 500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [pageNumber, pendingHighlightScrollId, highlights, settings.layoutMode]);
+
+  // TOC States
+
 
   useEffect(() => {
     if (!fileData) return;
@@ -191,11 +250,10 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     violet: 'background-color: rgba(192, 132, 252, 0.4); border-bottom: 2px solid rgba(192, 132, 252, 0.9); color: inherit;',
   };
 
-  const customTextRenderer = useCallback((textItem: any) => {
-    const { str, itemIndex } = textItem;
-    // pageIndex isn't directly in textItem, but textItem is bound per page if we wanted.
-    // Actually, we can just use the fact that itemIndex is unique per page.
-    let result = str;
+  const makeCustomTextRenderer = useCallback((renderPageIndex: number) => {
+    return (textItem: any) => {
+      const { str, itemIndex } = textItem;
+      let result = str;
     
     // highlightColors from component scope
     const highlightColors: Record<Highlight['color'], string> = {
@@ -208,6 +266,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     };
 
     for (const h of highlights) {
+      if (h.pageIndex !== undefined && h.pageIndex !== renderPageIndex) continue;
       if (h.startItemIndex !== undefined && h.endItemIndex !== undefined) {
         // Assume matching page via the fact we only render current pages, but better if we had pageIndex
         // For simplicity, if itemIndex falls in range. (Note: itemIndex restarts at 0 per page)
@@ -249,6 +308,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     
     // Always wrap in a span with data-item-index so we can extract it during selection!
     return `<span data-pdf-item-index="${itemIndex}">${result}</span>`;
+    };
   }, [highlights]);
 
   // Listen for text selection completion (mouseup/touchend) instead of selectionchange 
@@ -318,6 +378,26 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
 
 
 
+
+  // Track mouse for Zen Mode nav
+  useEffect(() => {
+    if (!isZenMode) {
+      setZenNavVisible(false);
+      return;
+    }
+    const handleMouseMove = (e: MouseEvent) => {
+      setZenNavVisible(e.clientY < 60);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches[0].clientY < 60) setZenNavVisible(true);
+      else setZenNavVisible(false);
+    };
+    window.addEventListener('touchstart', handleTouchStart);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('touchstart', handleTouchStart);
+  }, [isZenMode]);
+  
   // Listen for clicks on PDF highlight marks
   useEffect(() => {
     const handleMarkClick = (e: MouseEvent) => {
@@ -444,10 +524,12 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
         </div>
       )}
 
-      {/* Top Nav Bar */}
-      {!isZenMode && (
+      {/* Top Nav Bar (Auto-hidden in Zen Mode, revealed on top hover) */}
+      <div 
+        className={`${isZenMode ? 'fixed top-0 left-0 right-0 z-50 transition-all duration-300' : 'relative z-30 shrink-0'} ${isZenMode && !zenNavVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
+      >
         <nav
-          className={`h-12 border-b ${themeStyle.border} px-4 flex items-center justify-between z-30 shrink-0 select-none backdrop-blur-xs`}
+          className={`h-12 border-b ${themeStyle.border} px-4 flex items-center justify-between select-none backdrop-blur-xs ${isZenMode ? themeStyle.bg : ''}`}
         >
           <div className="flex items-center gap-2">
             <button
@@ -466,6 +548,16 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
               <List className="w-4 h-4" />
               <span className="hidden md:inline truncate max-w-[140px]">{book.title}</span>
             </button>
+
+            <button
+              onClick={() => setIsAnnotationsDrawerOpen(true)}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer flex items-center gap-1.5 text-xs ${themeStyle.text}`}
+              title="Notes & Highlights"
+            >
+              <ScrollText className="w-4 h-4" />
+              <span className="hidden md:inline">Notes</span>
+            </button>
+
           </div>
 
           <div className="flex items-center gap-1 sm:gap-2">
@@ -507,7 +599,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
             </button>
           </div>
         </nav>
-      )}
+      </div>
 
       {/* Click zones for desktop page turning */}
       <div
@@ -559,7 +651,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
                 <div className="flex flex-col gap-6 items-center w-full max-w-full">
                   {Array.from(new Array(numPages), (el, index) => (
                     <div key={`page_${index + 1}`} className="shadow-xl bg-white max-w-full overflow-hidden">
-                      <Page suspense={false} customTextRenderer={customTextRenderer}
+                      <Page suspense={false} customTextRenderer={makeCustomTextRenderer(index + 1)}
                         pageNumber={index + 1}
                         width={pdfMaxWidth * scale}
                         renderTextLayer={true}
@@ -572,7 +664,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
                 // Double Page Rendering
                 <div className="flex w-full justify-center gap-1 md:gap-4 p-4 max-w-full overflow-hidden">
                   <div className="shadow-xl bg-white overflow-hidden flex-shrink-0" style={{ width: (pdfMaxWidth * scale) / 2 }}>
-                    <Page suspense={false} customTextRenderer={customTextRenderer}
+                    <Page suspense={false} customTextRenderer={makeCustomTextRenderer(pageNumber)}
                       pageNumber={pageNumber}
                       width={(pdfMaxWidth * scale) / 2}
                       renderTextLayer={true}
@@ -581,7 +673,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
                   </div>
                   {pageNumber + 1 <= numPages && (
                     <div className="shadow-xl bg-white overflow-hidden flex-shrink-0" style={{ width: (pdfMaxWidth * scale) / 2 }}>
-                      <Page suspense={false} customTextRenderer={customTextRenderer}
+                      <Page suspense={false} customTextRenderer={makeCustomTextRenderer(pageNumber + 1)}
                         pageNumber={pageNumber + 1}
                         width={(pdfMaxWidth * scale) / 2}
                         renderTextLayer={true}
@@ -593,7 +685,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
               ) : (
                 // Single Page Rendering
                 <div className="max-w-full overflow-hidden flex justify-center">
-                  <Page suspense={false} customTextRenderer={customTextRenderer}
+                  <Page suspense={false} customTextRenderer={makeCustomTextRenderer(pageNumber)}
                     pageNumber={pageNumber}
                     width={pdfMaxWidth * scale}
                     renderTextLayer={true}
@@ -661,6 +753,22 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
       />
 
       {/* TOC Drawer Overlay */}
+
+      {/* Annotations Drawer */}
+      <AnnotationsDrawer
+        isOpen={isAnnotationsDrawerOpen}
+        onClose={() => setIsAnnotationsDrawerOpen(false)}
+        highlights={highlights}
+        bookmarks={[]}
+        onDeleteHighlight={handleDeleteHighlight}
+        onDeleteBookmark={() => {}}
+        onJumpToBookmark={() => {}}
+        onJumpToHighlight={(h) => {
+          setPendingHighlightScrollId(h.id);
+        }}
+        bookTitle={book.title}
+      />
+
       {isTOCOpen && (
         <>
           <div className="absolute inset-0 bg-black/20 z-40 backdrop-blur-sm" onClick={() => setIsTOCOpen(false)} />

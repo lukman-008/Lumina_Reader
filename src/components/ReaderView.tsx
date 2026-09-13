@@ -44,6 +44,8 @@ interface ReaderViewProps {
   onUpdateSettings: (newSettings: Partial<ReaderSettings>) => void;
   isZenMode: boolean;
   onToggleZenMode: () => void;
+  targetHighlightId?: string | null;
+  onClearTargetHighlight?: () => void;
 }
 
 const THEME_STYLES: Record<
@@ -129,6 +131,8 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     onUpdateSettings,
     isZenMode,
     onToggleZenMode,
+    targetHighlightId,
+    onClearTargetHighlight,
   } = props;
   const [currentChapterIndex, setCurrentChapterIndex] = useState(
     book.readingProgress.currentChapterIndex || 0
@@ -140,6 +144,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   // Drawers & toolbars
   const [isTOCDrawerOpen, setIsTOCDrawerOpen] = useState(false);
   const [isAnnotationsDrawerOpen, setIsAnnotationsDrawerOpen] = useState(false);
+  const [pendingHighlightScrollId, setPendingHighlightScrollId] = useState<string | null>(null);
   const [isTypographyOpen, setIsTypographyOpen] = useState(false);
   const [isAIOpen, setIsAIOpen] = useState(false);
   const [isTTSOpen, setIsTTSOpen] = useState(false);
@@ -163,7 +168,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
 
   // Selection popup state
   const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
-  const [selectionOffsets, setSelectionOffsets] = useState<{startOffset: number, endOffset: number} | null>(null);
+  const [selectionOffsets, setSelectionOffsets] = useState<{startOffset: number, endOffset: number, startItemIndex: number} | null>(null);
   const [selectedText, setSelectedText] = useState('');
 
   // Active clicked highlight popover state
@@ -175,6 +180,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   // TTS current sentence state
   const [ttsCurrentSentence, setTtsCurrentSentence] = useState('');
 
+  const [zenNavVisible, setZenNavVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
 
@@ -213,27 +219,27 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   // Split chapter content into readable desktop pages
   const pages = useMemo(() => {
     const paragraphs = currentChapter.content.split('\n\n').filter(Boolean);
-    const result: string[][] = [];
-    let currentPage: string[] = [];
+    const result: {text: string, globalIndex: number}[][] = [];
+    let currentPage: {text: string, globalIndex: number}[] = [];
     let currentWordCount = 0;
 
-    for (const p of paragraphs) {
+    paragraphs.forEach((p, idx) => {
       const words = p.split(/\s+/).length;
       if (currentWordCount + words > wordsPerPage && currentPage.length > 0) {
         result.push(currentPage);
-        currentPage = [p];
+        currentPage = [{text: p, globalIndex: idx}];
         currentWordCount = words;
       } else {
-        currentPage.push(p);
+        currentPage.push({text: p, globalIndex: idx});
         currentWordCount += words;
       }
-    }
+    });
 
     if (currentPage.length > 0) {
       result.push(currentPage);
     }
 
-    return result.length > 0 ? result : [[currentChapter.content]];
+    return result.length > 0 ? result : [[{text: currentChapter.content, globalIndex: 0}]];
   }, [currentChapter.content, wordsPerPage]);
 
   const totalPagesInChapter = pages.length;
@@ -265,6 +271,57 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     });
     return () => unsub();
   }, []);
+
+
+  // Handle global jump to highlight
+  useEffect(() => {
+    if (targetHighlightId) {
+      setPendingHighlightScrollId(targetHighlightId);
+      if (onClearTargetHighlight) onClearTargetHighlight();
+    }
+  }, [targetHighlightId, onClearTargetHighlight]);
+
+  useEffect(() => {
+    if (pendingHighlightScrollId) {
+      const targetHighlight = highlights.find(h => h.id === pendingHighlightScrollId);
+      
+      if (targetHighlight && targetHighlight.chapterIndex === currentChapterIndex) {
+        if (settings.layoutMode !== 'scroll') {
+          const searchStr = targetHighlight.selectedText.split('\n')[0].trim();
+          const foundPageIdx = pages.findIndex(page => page.some(p => p.includes(searchStr) || targetHighlight.selectedText.includes(p.trim())));
+          if (foundPageIdx !== -1 && foundPageIdx !== safePageIndex) {
+            setCurrentPageIndex(foundPageIdx);
+            return; 
+          }
+        }
+        
+        const el = document.getElementById(`hl-${pendingHighlightScrollId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const origStyle = el.style.boxShadow;
+          el.style.boxShadow = '0 0 0 4px rgba(245, 158, 11, 0.5)';
+          setTimeout(() => {
+            if (el) el.style.boxShadow = origStyle;
+          }, 1500);
+          setPendingHighlightScrollId(null);
+        } else {
+           const timer = setTimeout(() => {
+             const retryEl = document.getElementById(`hl-${pendingHighlightScrollId}`);
+             if (retryEl) {
+                retryEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                const origStyle = retryEl.style.boxShadow;
+                retryEl.style.boxShadow = '0 0 0 4px rgba(245, 158, 11, 0.5)';
+                setTimeout(() => {
+                  if (retryEl) retryEl.style.boxShadow = origStyle;
+                }, 1500);
+                setPendingHighlightScrollId(null);
+             }
+           }, 500);
+           return () => clearTimeout(timer);
+        }
+      }
+    }
+  }, [currentChapterIndex, safePageIndex, pendingHighlightScrollId, highlights, pages, settings.layoutMode]);
 
   // Navigation handlers
   const handleNextPage = () => {
@@ -475,6 +532,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       bookId: book.id,
       chapterIndex: currentChapterIndex,
       selectedText,
+      startItemIndex: selectionOffsets?.startItemIndex,
       startOffset: selectionOffsets?.startOffset,
       endOffset: selectionOffsets?.endOffset,
       color,
@@ -552,6 +610,26 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     setSelectionPosition(null);
   };
 
+
+  // Track mouse for Zen Mode nav
+  useEffect(() => {
+    if (!isZenMode) {
+      setZenNavVisible(false);
+      return;
+    }
+    const handleMouseMove = (e: MouseEvent) => {
+      setZenNavVisible(e.clientY < 60);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches[0].clientY < 60) setZenNavVisible(true);
+      else setZenNavVisible(false);
+    };
+    window.addEventListener('touchstart', handleTouchStart);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('touchstart', handleTouchStart);
+  }, [isZenMode]);
+  
   // Bionic reading word transformation helper
   const formatBionicText = (text: string) => {
     if (!settings.bionicReading) return text;
@@ -569,9 +647,9 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   };
 
   // Renders paragraph text with actual clickable, multi-color highlights
-  const renderParagraphContent = (paragraphText: string) => {
+  const renderParagraphContent = (paragraphText: string, globalIndex: number) => {
     const chapterHighlights = highlights.filter(
-      (h) => h.chapterIndex === currentChapterIndex && paragraphText.includes(h.selectedText)
+      (h) => h.chapterIndex === currentChapterIndex && (h.startItemIndex === undefined || h.startItemIndex === globalIndex) && paragraphText.includes(h.selectedText)
     );
 
     if (chapterHighlights.length === 0) {
@@ -613,6 +691,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
 
       elements.push(
         <mark
+          id={`hl-${h.id}`}
           key={`hl-${h.id}-${i}`}
           onClick={(e) => {
             e.stopPropagation();
@@ -677,9 +756,9 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     return results;
   }, [searchQuery, book.chapters]);
 
-  const renderParagraphBlock = (p: string, idx: number) => {
+  const renderParagraphBlock = (p: {text: string, globalIndex: number}, idx: number) => {
     // 1. Markdown Images
-    const imgMatch = p.match(/^!\[(.*?)\]\((.*?)\)$/);
+    const imgMatch = p.text.match(/^!\[(.*?)\]\((.*?)\)$/);
     if (imgMatch) {
       return (
         <div key={idx} className="my-8 flex justify-center w-full">
@@ -693,7 +772,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     }
     
     // 2. Markdown Headings
-    const headingMatch = p.match(/^(#{1,6})\s+(.+)$/);
+    const headingMatch = p.text.match(/^(#{1,6})\s+(.+)$/);
     if (headingMatch) {
       const level = headingMatch[1].length;
       const content = headingMatch[2];
@@ -710,16 +789,16 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       const HeadingTag = `h${level}` as any;
       
       return (
-        <HeadingTag key={idx} className={`${className} font-sans leading-tight`}>
-          {renderParagraphContent(content)}
+        <HeadingTag key={idx} data-paragraph-index={p.globalIndex} className={`${className} font-sans leading-tight`}>
+          {renderParagraphContent(content, p.globalIndex)}
         </HeadingTag>
       );
     }
     
     // 3. Normal Paragraph
     return (
-      <p key={idx} className="indent-6">
-        {renderParagraphContent(p)}
+      <p key={idx} data-paragraph-index={p.globalIndex} className="indent-6">
+        {renderParagraphContent(p.text, p.globalIndex)}
       </p>
     );
   };
@@ -769,10 +848,12 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         </div>
       )}
 
-      {/* Reader Navigation & Controls Bar (Auto-hidden in Zen Mode) */}
-      {!isZenMode && (
+      {/* Reader Navigation & Controls Bar (Auto-hidden in Zen Mode, revealed on top hover) */}
+      <div 
+        className={`${isZenMode ? 'fixed top-0 left-0 right-0 z-50 transition-all duration-300' : 'relative z-20 shrink-0'} ${isZenMode && !zenNavVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
+      >
         <nav
-          className={`h-12 border-b ${themeStyle.border} px-4 flex items-center justify-between z-20 shrink-0 select-none backdrop-blur-xs`}
+          className={`h-12 border-b ${themeStyle.border} px-4 flex items-center justify-between select-none backdrop-blur-xs ${isZenMode ? themeStyle.bg : ''}`}
           aria-label="Reading Controls"
         >
           {/* Left: Back & Table of Contents */}
@@ -925,7 +1006,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
             </button>
           </div>
         </nav>
-      )}
+      </div>
 
       {/* Floating Auto-Pacing Status Badge */}
       {isAutoPacing && (
@@ -976,6 +1057,10 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         onJumpToBookmark={(bm) => {
           setCurrentChapterIndex(bm.chapterIndex);
           setCurrentPageIndex(bm.pageIndex);
+        }}
+        onJumpToHighlight={(h) => {
+          setCurrentChapterIndex(h.chapterIndex);
+          setPendingHighlightScrollId(h.id);
         }}
         onUpdateBookmark={handleUpdateBookmark}
         bookTitle={book.title}
@@ -1182,7 +1267,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
             </div>
           ) : settings.layoutMode === 'scroll' ? (
             <div className="space-y-5 leading-relaxed">
-              {currentChapter.content.split('\n\n').map((p, idx) => renderParagraphBlock(p, idx))}
+              {currentChapter.content.split('\n\n').map((text, idx) => renderParagraphBlock({text, globalIndex: idx}, idx))}
             </div>
           ) : (
             <div className="space-y-5 leading-relaxed">
