@@ -22,6 +22,11 @@ export interface Highlight {
   bookId: string;
   chapterIndex: number;
   selectedText: string;
+  startOffset?: number;
+  endOffset?: number;
+  startItemIndex?: number;
+  endItemIndex?: number;
+  pdfPageIndex?: number;
   color: 'yellow' | 'emerald' | 'sky' | 'rose' | 'amber' | 'violet';
   note?: string;
   scope?: 'word' | 'line' | 'paragraph';

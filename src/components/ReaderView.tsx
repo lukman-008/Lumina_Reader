@@ -163,6 +163,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
 
   // Selection popup state
   const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
+  const [selectionOffsets, setSelectionOffsets] = useState<{startOffset: number, endOffset: number} | null>(null);
   const [selectedText, setSelectedText] = useState('');
 
   // Active clicked highlight popover state
@@ -370,25 +371,85 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     setRulerY(e.clientY);
   };
 
-  // Handle text selection
-  const handleMouseUp = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || !selection.toString().trim()) {
-      setSelectionPosition(null);
-      return;
-    }
+  // Listen for text selection completion (mouseup/touchend) instead of selectionchange 
+  // to avoid re-rendering the DOM while the user is actively dragging, which destroys the selection.
+  useEffect(() => {
+    const handleSelectionEnd = () => {
+      // Small timeout to allow the browser to settle the selection
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (selection && selection.toString().trim().length > 0) {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          
+          const container = document.querySelector('.reading-content') || document.querySelector('.react-pdf__Document');
+          if (container && !container.contains(range.commonAncestorContainer)) {
+            return;
+          }
 
-    const text = selection.toString().trim();
-    if (text.length > 1) {
-      setSelectedText(text);
-      const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
-      setSelectionPosition({
-        x: rect.left + rect.width / 2,
-        y: rect.top - 10,
-      });
-    }
-  };
+          
+          let sOffset = -1;
+          let eOffset = -1;
+          const pElem = range.commonAncestorContainer.nodeType === 3 
+             ? range.commonAncestorContainer.parentElement?.closest('p')
+             : (range.commonAncestorContainer as HTMLElement).closest('p');
+             
+          if (pElem) {
+            const preSelectionRange = range.cloneRange();
+            preSelectionRange.selectNodeContents(pElem);
+            preSelectionRange.setEnd(range.startContainer, range.startOffset);
+            sOffset = preSelectionRange.toString().length;
+            eOffset = sOffset + selection.toString().length;
+            setSelectionOffsets({ startOffset: sOffset, endOffset: eOffset });
+          } else {
+            setSelectionOffsets(null);
+          }
+          
+          setSelectedText(selection.toString().trim());
+          setSelectionPosition({
+            x: rect.left + rect.width / 2,
+            y: rect.top - 10,
+          });
+        }
+      }, 50);
+    };
+    
+    document.addEventListener('mouseup', handleSelectionEnd);
+    document.addEventListener('touchend', handleSelectionEnd);
+    document.addEventListener('keyup', (e) => {
+      if (e.shiftKey && e.key.includes('Arrow')) {
+        handleSelectionEnd();
+      }
+    });
+
+    return () => {
+      document.removeEventListener('mouseup', handleSelectionEnd);
+      document.removeEventListener('touchend', handleSelectionEnd);
+    };
+  }, []);
+
+
+  // Close popup if clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.fixed.z-50')) {
+        // Wait for browser to process the click/tap and potentially clear selection
+        setTimeout(() => {
+          const selection = window.getSelection();
+          if (!selection || selection.toString().trim().length === 0) {
+            setSelectionPosition(null);
+          }
+        }, 100);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
 
   // Create highlight
   const handleCreateHighlight = async (color: Highlight['color'], note?: string) => {
@@ -407,6 +468,8 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       bookId: book.id,
       chapterIndex: currentChapterIndex,
       selectedText,
+      startOffset: selectionOffsets?.startOffset,
+      endOffset: selectionOffsets?.endOffset,
       color,
       note,
       scope,
@@ -509,9 +572,11 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     }
 
     // Sort highlights by where they appear
-    const sorted = [...chapterHighlights].sort(
-      (a, b) => paragraphText.indexOf(a.selectedText) - paragraphText.indexOf(b.selectedText)
-    );
+    const sorted = [...chapterHighlights].sort((a, b) => {
+      const idxA = a.startOffset !== undefined ? a.startOffset : paragraphText.indexOf(a.selectedText);
+      const idxB = b.startOffset !== undefined ? b.startOffset : paragraphText.indexOf(b.selectedText);
+      return idxA - idxB;
+    });
 
     const elements: React.ReactNode[] = [];
     let lastIndex = 0;
@@ -526,7 +591,11 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     };
 
     sorted.forEach((h, i) => {
-      const idx = paragraphText.indexOf(h.selectedText, lastIndex);
+      let idx = h.startOffset !== undefined ? h.startOffset : paragraphText.indexOf(h.selectedText, lastIndex);
+      // Fallback if offset doesn't match string (e.g. text changed or whitespace issues)
+      if (h.startOffset !== undefined && paragraphText.substring(h.startOffset, h.endOffset).trim() !== h.selectedText.trim()) {
+        idx = paragraphText.indexOf(h.selectedText, lastIndex);
+      }
       if (idx === -1) return;
 
       if (idx > lastIndex) {
@@ -652,7 +721,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     <div
       ref={containerRef}
       onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
+      
       className={`${
         isZenMode ? 'h-screen' : 'h-[calc(100vh-2.75rem)]'
       } w-full flex flex-col transition-colors duration-200 relative overflow-hidden ${themeStyle.bg} ${themeStyle.text}`}

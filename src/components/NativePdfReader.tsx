@@ -40,12 +40,14 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   // Selection popup states
   const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
   const [selectedText, setSelectedText] = useState<string>('');
+  const [selectionOffsets, setSelectionOffsets] = useState<{startItemIndex: number, startOffset: number, endItemIndex: number, endOffset: number, pageIndex: number} | null>(null);
 
   // TOC States
   const [pdfOutline, setPdfOutline] = useState<any[] | null>(null);
   const [isTOCOpen, setIsTOCOpen] = useState<boolean>(false);
   const [isAIOpen, setIsAIOpen] = useState<boolean>(false);
   const [pdfInstance, setPdfInstance] = useState<any>(null);
+  const [highlights, setHighlights] = useState<any[]>([]);
 
   useEffect(() => {
     if (!fileData) return;
@@ -153,31 +155,166 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [numPages]);
 
-  // Handle text selection for native PDF highlighting
   useEffect(() => {
-    const handleSelectionChange = () => {
-      const selection = window.getSelection();
-      if (selection && selection.toString().trim().length > 0) {
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        
-        // Don't show if the selection is outside our container
-        if (containerRef.current && !containerRef.current.contains(range.commonAncestorContainer)) {
-           return;
-        }
+    const loadHighlights = async () => {
+      const all = await db.highlights.where('bookId').equals(book.id).toArray();
+      setHighlights(all);
+    };
+    loadHighlights();
+  }, [book.id]);
 
-        setSelectedText(selection.toString().trim());
-        setSelectionPosition({
-          x: rect.left + rect.width / 2,
-          y: rect.top - 10,
-        });
-      } else {
-        setSelectionPosition(null);
-      }
+  const highlightColors: Record<string, string> = {
+    yellow: 'background-color: rgba(251, 191, 36, 0.4); border-bottom: 2px solid rgba(251, 191, 36, 0.9); color: inherit;',
+    emerald: 'background-color: rgba(52, 211, 153, 0.4); border-bottom: 2px solid rgba(52, 211, 153, 0.9); color: inherit;',
+    sky: 'background-color: rgba(56, 189, 248, 0.4); border-bottom: 2px solid rgba(56, 189, 248, 0.9); color: inherit;',
+    rose: 'background-color: rgba(251, 113, 133, 0.4); border-bottom: 2px solid rgba(251, 113, 133, 0.9); color: inherit;',
+    amber: 'background-color: rgba(251, 146, 60, 0.4); border-bottom: 2px solid rgba(251, 146, 60, 0.9); color: inherit;',
+    violet: 'background-color: rgba(192, 132, 252, 0.4); border-bottom: 2px solid rgba(192, 132, 252, 0.9); color: inherit;',
+  };
+
+  const customTextRenderer = (textItem: any) => {
+    const { str, itemIndex } = textItem;
+    // pageIndex isn't directly in textItem, but textItem is bound per page if we wanted.
+    // Actually, we can just use the fact that itemIndex is unique per page.
+    let result = str;
+    
+    // highlightColors from component scope
+    const highlightColors: Record<Highlight['color'], string> = {
+      yellow: 'background-color: rgba(251, 191, 36, 0.4); border-bottom: 2px solid rgba(251, 191, 36, 0.9); color: inherit;',
+      emerald: 'background-color: rgba(52, 211, 153, 0.4); border-bottom: 2px solid rgba(52, 211, 153, 0.9); color: inherit;',
+      sky: 'background-color: rgba(56, 189, 248, 0.4); border-bottom: 2px solid rgba(56, 189, 248, 0.9); color: inherit;',
+      rose: 'background-color: rgba(251, 113, 133, 0.4); border-bottom: 2px solid rgba(251, 113, 133, 0.9); color: inherit;',
+      amber: 'background-color: rgba(251, 146, 60, 0.4); border-bottom: 2px solid rgba(251, 146, 60, 0.9); color: inherit;',
+      violet: 'background-color: rgba(192, 132, 252, 0.4); border-bottom: 2px solid rgba(192, 132, 252, 0.9); color: inherit;',
     };
 
-    document.addEventListener('selectionchange', handleSelectionChange);
-    return () => document.removeEventListener('selectionchange', handleSelectionChange);
+    for (const h of highlights) {
+      if (h.startItemIndex !== undefined && h.endItemIndex !== undefined) {
+        // Assume matching page via the fact we only render current pages, but better if we had pageIndex
+        // For simplicity, if itemIndex falls in range. (Note: itemIndex restarts at 0 per page)
+        // Wait, if itemIndex restarts at 0 per page, and we show TWO pages on screen (double mode),
+        // we need to be careful. But NativePdfReader renders <Page> which scopes customTextRenderer per page.
+        // Wait, customTextRenderer doesn't know its pageNumber. We can pass it in via closure?
+        // Yes, but react-pdf's customTextRenderer prop is shared. Let's just use itemIndex and hope highlights don't clash across visible pages.
+        // Actually, if we just check if str is part of h.selectedText as a secondary guard!
+        
+        // Let's use the precise itemIndex logic:
+        const style = highlightColors[h.color] || highlightColors.yellow;
+        if (itemIndex === h.startItemIndex && itemIndex === h.endItemIndex) {
+           const before = str.slice(0, h.startOffset);
+           const marked = str.slice(h.startOffset, h.endOffset);
+           const after = str.slice(h.endOffset);
+           result = `${before}<mark style="${style}">${marked}</mark>${after}`;
+        } else if (itemIndex === h.startItemIndex) {
+           const before = str.slice(0, h.startOffset);
+           const marked = str.slice(h.startOffset);
+           result = `${before}<mark style="${style}">${marked}</mark>`;
+        } else if (itemIndex === h.endItemIndex) {
+           const marked = str.slice(0, h.endOffset);
+           const after = str.slice(h.endOffset);
+           result = `<mark style="${style}">${marked}</mark>${after}`;
+        } else if (itemIndex > h.startItemIndex && itemIndex < h.endItemIndex) {
+           result = `<mark style="${style}">${str}</mark>`;
+        }
+      } else {
+        // Fallback for old highlights without itemIndex
+        if (str.includes(h.selectedText)) {
+          const style = highlightColors[h.color] || highlightColors.yellow;
+          result = result.replace(
+            h.selectedText,
+            `<mark style="${style}">${h.selectedText}</mark>`
+          );
+        }
+      }
+    }
+    
+    // Always wrap in a span with data-item-index so we can extract it during selection!
+    return `<span data-pdf-item-index="${itemIndex}">${result}</span>`;
+  };
+
+  // Listen for text selection completion (mouseup/touchend) instead of selectionchange 
+  // to avoid re-rendering the DOM while the user is actively dragging, which destroys the selection.
+  useEffect(() => {
+    const handleSelectionEnd = () => {
+      setTimeout(() => {
+        const selection = window.getSelection();
+        if (selection && selection.toString().trim().length > 0) {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          
+          const container = document.querySelector('.react-pdf__Document');
+          if (container && !container.contains(range.commonAncestorContainer)) {
+            return;
+          }
+
+          // Extract pdf item indexes from the DOM
+          const getPdfIndex = (node) => {
+            const span = node.nodeType === 3 ? node.parentElement.closest('[data-pdf-item-index]') : node.closest('[data-pdf-item-index]');
+            if (span) {
+              return parseInt(span.getAttribute('data-pdf-item-index') || '-1', 10);
+            }
+            return -1;
+          };
+
+          const startItemIndex = getPdfIndex(range.startContainer);
+          const endItemIndex = getPdfIndex(range.endContainer);
+          
+          if (startItemIndex !== -1 && endItemIndex !== -1) {
+            setSelectionOffsets({
+              startItemIndex: Math.min(startItemIndex, endItemIndex),
+              startOffset: startItemIndex <= endItemIndex ? range.startOffset : range.endOffset,
+              endItemIndex: Math.max(startItemIndex, endItemIndex),
+              endOffset: startItemIndex <= endItemIndex ? range.endOffset : range.startOffset,
+              pageIndex: pageNumber
+            });
+          } else {
+            setSelectionOffsets(null);
+          }
+
+          setSelectedText(selection.toString().trim());
+          setSelectionPosition({
+            x: rect.left + rect.width / 2,
+            y: rect.top - 10,
+          });
+        }
+      }, 50);
+    };
+    
+    document.addEventListener('mouseup', handleSelectionEnd);
+    document.addEventListener('touchend', handleSelectionEnd);
+    document.addEventListener('keyup', (e) => {
+      if (e.shiftKey && e.key.includes('Arrow')) {
+        handleSelectionEnd();
+      }
+    });
+
+    return () => {
+      document.removeEventListener('mouseup', handleSelectionEnd);
+      document.removeEventListener('touchend', handleSelectionEnd);
+    };
+  }, []);
+
+
+  // Close popup if clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.fixed.z-50')) {
+        // Wait for browser to process the click/tap and potentially clear selection
+        setTimeout(() => {
+          const selection = window.getSelection();
+          if (!selection || selection.toString().trim().length === 0) {
+            setSelectionPosition(null);
+          }
+        }, 100);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
   // Compute theme styles mapping based on Lumina's themes
@@ -219,6 +356,8 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     });
     setSelectionPosition(null);
     window.getSelection()?.removeAllRanges();
+    const all = await db.highlights.where('bookId').equals(book.id).toArray();
+    setHighlights(all);
   };
 
   return (
@@ -327,7 +466,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
               width: '100%' 
             }}
           >
-            <Document
+            <Document suspense={false}
               file={pdfUrl}
               onLoadSuccess={onDocumentLoadSuccess}
               error={
@@ -341,7 +480,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
                 <div className="flex flex-col gap-6 items-center w-full max-w-full">
                   {Array.from(new Array(numPages), (el, index) => (
                     <div key={`page_${index + 1}`} className="shadow-xl bg-white max-w-full overflow-hidden">
-                      <Page
+                      <Page suspense={false} customTextRenderer={customTextRenderer}
                         pageNumber={index + 1}
                         width={pdfMaxWidth * scale}
                         renderTextLayer={true}
@@ -354,7 +493,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
                 // Double Page Rendering
                 <div className="flex w-full justify-center gap-1 md:gap-4 p-4 max-w-full overflow-hidden">
                   <div className="shadow-xl bg-white overflow-hidden flex-shrink-0" style={{ width: (pdfMaxWidth * scale) / 2 }}>
-                    <Page
+                    <Page suspense={false} customTextRenderer={customTextRenderer}
                       pageNumber={pageNumber}
                       width={(pdfMaxWidth * scale) / 2}
                       renderTextLayer={true}
@@ -363,7 +502,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
                   </div>
                   {pageNumber + 1 <= numPages && (
                     <div className="shadow-xl bg-white overflow-hidden flex-shrink-0" style={{ width: (pdfMaxWidth * scale) / 2 }}>
-                      <Page
+                      <Page suspense={false} customTextRenderer={customTextRenderer}
                         pageNumber={pageNumber + 1}
                         width={(pdfMaxWidth * scale) / 2}
                         renderTextLayer={true}
@@ -375,7 +514,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
               ) : (
                 // Single Page Rendering
                 <div className="max-w-full overflow-hidden flex justify-center">
-                  <Page
+                  <Page suspense={false} customTextRenderer={customTextRenderer}
                     pageNumber={pageNumber}
                     width={pdfMaxWidth * scale}
                     renderTextLayer={true}
