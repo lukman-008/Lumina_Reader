@@ -54,6 +54,16 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
 
   if (!isOpen) return null;
 
+
+  const handleClose = () => {
+    setQueue([]);
+    setPasteTitle('');
+    setPasteAuthor('');
+    setPasteContent('');
+    setActiveTab('upload');
+    onClose();
+  };
+
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
@@ -137,7 +147,7 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
     }
     setIsProcessing(false);
     onBooksImported();
-    onClose();
+    handleClose();
   };
 
   const handleImportPastedArticle = async () => {
@@ -173,7 +183,7 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
 
     await db.books.put(newBook);
     onBooksImported();
-    onClose();
+    handleClose();
   };
 
   const successfulCount = queue.filter((i) => i.status === 'success').length;
@@ -196,7 +206,7 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
           </div>
 
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -432,7 +442,7 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
             </span>
             <div className="flex items-center gap-2">
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className="px-3 py-1.5 rounded-xl text-xs text-slate-400 hover:text-white"
               >
                 Cancel

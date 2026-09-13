@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Book, ReaderSettings, Highlight } from '../types';
 import { db } from '../services/db';
+import { habitTracker } from '../services/habitTracker';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Minimize2, Settings, List, X, Square, Columns2, ScrollText } from 'lucide-react';
 import { SelectionPopup } from './SelectionPopup';
@@ -34,6 +35,16 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [fileData, setFileData] = useState<ArrayBuffer | Blob | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+
+  // Track habits and clean up TTS
+  useEffect(() => {
+    habitTracker.startSession(book.id, book.title);
+    return () => {
+      habitTracker.endSession();
+      ttsService.stop();
+    };
+  }, [book.id, book.title]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(800);
   const [scale, setScale] = useState<number>(1.0);
@@ -290,15 +301,18 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     
     document.addEventListener('mouseup', handleSelectionEnd);
     document.addEventListener('touchend', handleSelectionEnd);
-    document.addEventListener('keyup', (e) => {
+    const handleKeyUp = (e: KeyboardEvent) => {
       if (e.shiftKey && e.key.includes('Arrow')) {
         handleSelectionEnd();
       }
-    });
+    };
+    
+    document.addEventListener('keyup', handleKeyUp);
 
     return () => {
       document.removeEventListener('mouseup', handleSelectionEnd);
       document.removeEventListener('touchend', handleSelectionEnd);
+      document.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
 

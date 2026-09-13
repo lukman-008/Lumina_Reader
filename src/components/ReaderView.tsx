@@ -188,6 +188,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     habitTracker.startSession(book.id, book.title);
     return () => {
       habitTracker.endSession();
+      ttsService.stop();
     };
   }, [book.id, book.title]);
 
@@ -416,15 +417,18 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     
     document.addEventListener('mouseup', handleSelectionEnd);
     document.addEventListener('touchend', handleSelectionEnd);
-    document.addEventListener('keyup', (e) => {
+    const handleKeyUp = (e: KeyboardEvent) => {
       if (e.shiftKey && e.key.includes('Arrow')) {
         handleSelectionEnd();
       }
-    });
+    };
+    
+    document.addEventListener('keyup', handleKeyUp);
 
     return () => {
       document.removeEventListener('mouseup', handleSelectionEnd);
       document.removeEventListener('touchend', handleSelectionEnd);
+      document.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
 

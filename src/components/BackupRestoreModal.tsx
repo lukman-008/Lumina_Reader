@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Download,
   Upload,
@@ -30,6 +30,17 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
   const [isRestoring, setIsRestoring] = useState(false);
   const [restoreSuccess, setRestoreSuccess] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+
+  useEffect(() => {
+    if (isOpen) {
+      setImportedBackup(null);
+      setIsRestoring(false);
+      setRestoreSuccess(null);
+      setErrorMessage(null);
+    }
+  }, [isOpen]);
+
 
   if (!isOpen) return null;
 
