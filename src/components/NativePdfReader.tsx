@@ -80,41 +80,45 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     if (pendingHighlightScrollId) {
       const targetHighlight = highlights.find(h => h.id === pendingHighlightScrollId);
       
-      if (targetHighlight && targetHighlight.pdfPageIndex !== undefined) {
+      if (targetHighlight) {
+        const targetPage = targetHighlight.pdfPageIndex !== undefined ? targetHighlight.pdfPageIndex : targetHighlight.chapterIndex + 1;
+        
         // Only jump if it's not currently visible
         const currentPages = settings.layoutMode === 'double' ? [pageNumber, pageNumber + 1] : [pageNumber];
-        if (!currentPages.includes(targetHighlight.pdfPageIndex)) {
+        if (!currentPages.includes(targetPage)) {
           // It's not visible, we need to change page!
-          setPageNumber(targetHighlight.pdfPageIndex);
+          setPageNumber(targetPage);
           // Don't clear pendingHighlightScrollId yet, let it render and find it in the DOM on next effect pass
           return; 
         }
       }
 
-      const el = document.querySelector(`mark[data-highlight-id="${pendingHighlightScrollId}"]`) as HTMLElement;
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        const origStyle = el.style.boxShadow;
-        el.style.boxShadow = '0 0 0 4px rgba(245, 158, 11, 0.5)';
-        setTimeout(() => {
-          if (el) el.style.boxShadow = origStyle;
-        }, 1500);
-        setPendingHighlightScrollId(null);
-      } else {
-        const timer = setTimeout(() => {
-          const retryEl = document.querySelector(`mark[data-highlight-id="${pendingHighlightScrollId}"]`) as HTMLElement;
-          if (retryEl) {
-            retryEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            const origStyle = retryEl.style.boxShadow;
-            retryEl.style.boxShadow = '0 0 0 4px rgba(245, 158, 11, 0.5)';
-            setTimeout(() => {
-              if (retryEl) retryEl.style.boxShadow = origStyle;
-            }, 1500);
+      let attempts = 0;
+      const maxAttempts = 20; // 4 seconds total
+      
+      const tryScroll = () => {
+        const el = document.querySelector(`mark[data-highlight-id="${pendingHighlightScrollId}"]`) as HTMLElement;
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const origStyle = el.style.boxShadow;
+          el.style.boxShadow = '0 0 0 4px rgba(245, 158, 11, 0.5)';
+          setTimeout(() => {
+            if (el) el.style.boxShadow = origStyle;
+          }, 1500);
+          setPendingHighlightScrollId(null);
+        } else {
+          attempts++;
+          if (attempts < maxAttempts) {
+            timer = setTimeout(tryScroll, 250);
+          } else {
+            // Give up after 5 seconds
             setPendingHighlightScrollId(null);
           }
-        }, 500);
-        return () => clearTimeout(timer);
-      }
+        }
+      };
+      
+      let timer = setTimeout(tryScroll, 100);
+      return () => clearTimeout(timer);
     }
   }, [pageNumber, pendingHighlightScrollId, highlights, settings.layoutMode]);
 
@@ -266,7 +270,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     };
 
     for (const h of highlights) {
-      if (h.pageIndex !== undefined && h.pageIndex !== renderPageIndex) continue;
+      if (h.pdfPageIndex !== undefined && h.pdfPageIndex !== renderPageIndex) continue;
       if (h.startItemIndex !== undefined && h.endItemIndex !== undefined) {
         // Assume matching page via the fact we only render current pages, but better if we had pageIndex
         // For simplicity, if itemIndex falls in range. (Note: itemIndex restarts at 0 per page)
@@ -337,14 +341,24 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
 
           const startItemIndex = getPdfIndex(range.startContainer);
           const endItemIndex = getPdfIndex(range.endContainer);
+             
+          const getPdfPageIndex = (node) => {
+            const pageContainer = node.nodeType === 3 ? node.parentElement?.closest('.react-pdf__Page') : node.closest('.react-pdf__Page');
+            if (pageContainer) {
+              return parseInt(pageContainer.getAttribute('data-page-number') || '-1', 10);
+            }
+            return pageNumber;
+          };
           
+          const selectionPageIndex = getPdfPageIndex(range.startContainer);
+
           if (startItemIndex !== -1 && endItemIndex !== -1) {
             setSelectionOffsets({
               startItemIndex: Math.min(startItemIndex, endItemIndex),
               startOffset: startItemIndex <= endItemIndex ? range.startOffset : range.endOffset,
               endItemIndex: Math.max(startItemIndex, endItemIndex),
               endOffset: startItemIndex <= endItemIndex ? range.endOffset : range.startOffset,
-              pageIndex: pageNumber
+              pageIndex: selectionPageIndex
             });
           } else {
             setSelectionOffsets(null);
@@ -490,7 +504,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     await db.highlights.put({
       id: `hl-${Date.now()}`,
       bookId: book.id,
-      chapterIndex: pageNumber - 1,
+      chapterIndex: selectionOffsets?.pageIndex ? selectionOffsets.pageIndex - 1 : pageNumber - 1,
       selectedText,
       startItemIndex: selectionOffsets?.startItemIndex,
       startOffset: selectionOffsets?.startOffset,
