@@ -51,8 +51,8 @@ export const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
 
   const progressBarRef = useRef<HTMLDivElement>(null);
 
-  const currentChapter = book.chapters[currentChapterIndex] || book.chapters[0];
-  const totalChapters = book.chapters.length;
+  const currentChapter = (book.chapters || [])[currentChapterIndex] || (book.chapters || [])[0];
+  const totalChapters = (book.chapters || []).length;
 
   // Calculate book-wide progress
   const bookProgressPercent = Math.min(
@@ -77,7 +77,7 @@ export const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
   // Total words left in book
   let remainingWordsInBook = wordsLeftInChapter;
   for (let i = currentChapterIndex + 1; i < totalChapters; i++) {
-    remainingWordsInBook += book.chapters[i]?.wordCount || 0;
+    remainingWordsInBook += (book.chapters || [])[i]?.wordCount || 0;
   }
   const totalHoursLeftInBook = (remainingWordsInBook / (220 * 60)).toFixed(1);
 
@@ -131,7 +131,7 @@ export const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
           className="fixed bottom-14 z-50 px-3 py-1.5 rounded-xl bg-slate-900/95 border border-slate-700 shadow-2xl text-[11px] text-slate-200 pointer-events-none animate-in fade-in zoom-in-95 duration-100 flex flex-col items-center gap-0.5"
         >
           <span className="font-semibold text-amber-400">
-            {book.chapters[hoverPosition.chapterIndex]?.title || 'Chapter'}
+            {(book.chapters || [])[hoverPosition.chapterIndex]?.title || 'Chapter'}
           </span>
           <span className="text-[10px] text-slate-400">
             Click to jump · {hoverPosition.percent}% of book

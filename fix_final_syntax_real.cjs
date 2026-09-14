@@ -1,17 +1,29 @@
 const fs = require('fs');
 let content = fs.readFileSync('src/components/NativePdfReader.tsx', 'utf8');
 
-// The error is because we injected `{pdfViewMode === 'reader' ? (` inside `{settings.layoutMode === 'scroll' ? (` which breaks the JSX flow or we injected it inside the <Document> tag where it isn't expected in that structure.
-// Let's replace the whole inner Document block safely.
+// The issue was I kept replacing the SAME THING and failing to remove the BAD STUFF.
+// The bad stuff is inside the {pdfUrl ? ... block.
 
-const badStructureRegex = /\{pdfViewMode === 'reader' \? \([\s\S]*?\)\s*<\/Document>/;
+const startBad = content.indexOf('{!pdfUrl ? (');
+const endBad = content.indexOf('{/* Footer Info */}');
 
-content = content.replace(badStructureRegex, `</Document>`); // Just clean it up first
+const badBlock = content.substring(startBad, endBad);
+console.log(badBlock.substring(0, 100));
 
-// We want to put the reader mode outside the <Document>
-const documentWrapRegex = /<div style=\{\{ filter: getPdfFilterStyle\(\), transition: 'filter 0\.3s ease' \}\}>[\s\S]*?<\/Document>\s*<\/div>/;
-
-const newDocumentWrap = `{pdfViewMode === 'reader' ? (
+content = content.replace(badBlock, `{!pdfUrl ? (
+          <div className="flex flex-col items-center justify-center h-full space-y-4 opacity-50">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
+            <p>Loading High-Fidelity PDF Engine...</p>
+          </div>
+        ) : (
+          <div 
+            className={\`shadow-2xl transition-all duration-300 \${themeStyle.container} \${settings.layoutMode !== 'scroll' ? 'rounded-lg overflow-hidden' : ''}\`}
+            style={{ 
+              maxWidth: pdfMaxWidth * scale,
+              width: '100%' 
+            }}
+          >
+            {pdfViewMode === 'reader' ? (
               <div className={\`w-full h-full min-h-[60vh] overflow-y-auto px-6 py-12 flex justify-center \${themeStyle.bg}\`}>
                 <div 
                   className={\`max-w-3xl w-full flex flex-col gap-6 \${settings.fontFamily} \${themeStyle.text}\`}
@@ -21,7 +33,7 @@ const newDocumentWrap = `{pdfViewMode === 'reader' ? (
                     textAlign: settings.textAlign as any
                   }}
                 >
-                  {isExtractingText && !extractedPageText[pageNumber] ? (
+                  {isExtractingText && (!extractedPageText[pageNumber]) ? (
                     <div className="flex justify-center items-center h-40 opacity-60">Extracting text...</div>
                   ) : (
                     <>
@@ -99,8 +111,11 @@ const newDocumentWrap = `{pdfViewMode === 'reader' ? (
               )}
             </Document>
             </div>
-            )}`;
-
-content = content.replace(documentWrapRegex, newDocumentWrap);
+            )}
+          </div>
+        )}
+      </div>
+      
+      `);
 
 fs.writeFileSync('src/components/NativePdfReader.tsx', content);

@@ -21,7 +21,7 @@ class SearchIndexService {
     }
 
     const paragraphs: IndexedParagraph[] = [];
-    book.chapters.forEach((ch, chIdx) => {
+    (book.chapters || []).forEach((ch, chIdx) => {
       const paras = ch.content.split('\n\n').filter(Boolean);
       paras.forEach((para, pIdx) => {
         const clean = para.trim();

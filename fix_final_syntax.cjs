@@ -1,17 +1,9 @@
 const fs = require('fs');
 let content = fs.readFileSync('src/components/NativePdfReader.tsx', 'utf8');
 
-// The error is because we injected `{pdfViewMode === 'reader' ? (` inside `{settings.layoutMode === 'scroll' ? (` which breaks the JSX flow or we injected it inside the <Document> tag where it isn't expected in that structure.
-// Let's replace the whole inner Document block safely.
+const regex = /\{pdfViewMode === 'reader' \? \([\s\S]*?<\/Document>/;
 
-const badStructureRegex = /\{pdfViewMode === 'reader' \? \([\s\S]*?\)\s*<\/Document>/;
-
-content = content.replace(badStructureRegex, `</Document>`); // Just clean it up first
-
-// We want to put the reader mode outside the <Document>
-const documentWrapRegex = /<div style=\{\{ filter: getPdfFilterStyle\(\), transition: 'filter 0\.3s ease' \}\}>[\s\S]*?<\/Document>\s*<\/div>/;
-
-const newDocumentWrap = `{pdfViewMode === 'reader' ? (
+content = content.replace(regex, `{pdfViewMode === 'reader' ? (
               <div className={\`w-full h-full min-h-[60vh] overflow-y-auto px-6 py-12 flex justify-center \${themeStyle.bg}\`}>
                 <div 
                   className={\`max-w-3xl w-full flex flex-col gap-6 \${settings.fontFamily} \${themeStyle.text}\`}
@@ -21,7 +13,7 @@ const newDocumentWrap = `{pdfViewMode === 'reader' ? (
                     textAlign: settings.textAlign as any
                   }}
                 >
-                  {isExtractingText && !extractedPageText[pageNumber] ? (
+                  {isExtractingText && (!extractedPageText[pageNumber]) ? (
                     <div className="flex justify-center items-center h-40 opacity-60">Extracting text...</div>
                   ) : (
                     <>
@@ -99,8 +91,6 @@ const newDocumentWrap = `{pdfViewMode === 'reader' ? (
               )}
             </Document>
             </div>
-            )}`;
-
-content = content.replace(documentWrapRegex, newDocumentWrap);
+            )}`);
 
 fs.writeFileSync('src/components/NativePdfReader.tsx', content);

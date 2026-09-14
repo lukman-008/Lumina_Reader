@@ -150,7 +150,7 @@ const handleNavigateToResult = useCallback(
         if (targetBook.format !== 'pdf') {
           clampedIndex = Math.min(
             Math.max(0, chapterIndex),
-            Math.max(0, targetBook.chapters.length - 1)
+            Math.max(0, (targetBook.chapters?.length || 1) - 1)
           );
         } else {
           // For PDFs, chapterIndex is used as the zero-indexed page number in some places
@@ -159,7 +159,7 @@ const handleNavigateToResult = useCallback(
         }
 
         const percentage = Math.round(
-          ((clampedIndex + 1) / Math.max(1, targetBook.chapters.length)) * 100
+          ((clampedIndex + 1) / Math.max(1, targetBook.chapters?.length || 1)) * 100
         );
 
         const updatedProgress = {

@@ -184,7 +184,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
 
-  const currentChapter = book.chapters[currentChapterIndex] || book.chapters[0];
+  const currentChapter = (book.chapters || [])[currentChapterIndex] || (book.chapters || [])[0];
   const themeStyle = THEME_STYLES[settings.theme] || THEME_STYLES.paper;
   const activeAccent = settings.accentColor || 'amber';
   const accentConfig = ACCENT_MAP[activeAccent] || ACCENT_MAP.amber;
@@ -250,7 +250,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   useEffect(() => {
     const saveProgress = async () => {
       const percentage = Math.round(
-        ((currentChapterIndex + (currentPageIndex + 1) / totalPagesInChapter) / book.chapters.length) * 100
+        ((currentChapterIndex + (currentPageIndex + 1) / totalPagesInChapter) / (book.chapters || []).length) * 100
       );
       const updatedProgress = {
         currentChapterIndex,
@@ -262,7 +262,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       habitTracker.recordActivity(wordsPerPage);
     };
     saveProgress();
-  }, [currentChapterIndex, currentPageIndex, totalPagesInChapter, book.id, book.chapters.length, wordsPerPage]);
+  }, [currentChapterIndex, currentPageIndex, totalPagesInChapter, book.id, (book.chapters || []).length, wordsPerPage]);
 
   // TTS sentence listener
   useEffect(() => {
@@ -328,7 +328,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     if (safePageIndex < totalPagesInChapter - 1) {
       setCurrentPageIndex((prev) => prev + 1);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else if (currentChapterIndex < book.chapters.length - 1) {
+    } else if (currentChapterIndex < (book.chapters || []).length - 1) {
       setCurrentChapterIndex((prev) => prev + 1);
       setCurrentPageIndex(0);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -741,7 +741,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   const searchResults = useMemo(() => {
     if (!searchQuery.trim() || searchQuery.length < 2) return [];
     const results: { chapterIndex: number; chapterTitle: string; snippet: string }[] = [];
-    book.chapters.forEach((ch, idx) => {
+    (book.chapters || []).forEach((ch, idx) => {
       const pos = ch.content.toLowerCase().indexOf(searchQuery.toLowerCase());
       if (pos !== -1) {
         const start = Math.max(0, pos - 40);
@@ -754,7 +754,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       }
     });
     return results;
-  }, [searchQuery, book.chapters]);
+  }, [searchQuery, (book.chapters || [])]);
 
   const renderParagraphBlock = (p: {text: string, globalIndex: number}, idx: number) => {
     // 1. Markdown Images
@@ -1035,7 +1035,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       <TOCDrawer
         isOpen={isTOCDrawerOpen}
         onClose={() => setIsTOCDrawerOpen(false)}
-        chapters={book.chapters}
+        chapters={(book.chapters || [])}
         currentChapterIndex={currentChapterIndex}
         onSelectChapter={(idx) => {
           setCurrentChapterIndex(idx);

@@ -346,7 +346,7 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
                             <p className="text-[10px] text-slate-500">
                               {(item.size / 1024).toFixed(1)} KB •{' '}
                               {item.parsedBook
-                                ? `${item.parsedBook.chapters.length} chapters, ${item.parsedBook.totalWords.toLocaleString()} words`
+                                ? `${(item.parsedBook.chapters?.length || 0)} chapters, ${item.parsedBook.totalWords.toLocaleString()} words`
                                 : item.status}
                             </p>
                           </div>

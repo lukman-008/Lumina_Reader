@@ -161,7 +161,7 @@ export const SearchIndexModal: React.FC<SearchIndexModalProps> = ({
             </div>
 
             {/* Chapter filter if current book selected */}
-            {searchScope === 'current' && currentBook && currentBook.chapters.length > 1 && (
+            {searchScope === 'current' && currentBook && (currentBook.chapters?.length || 0) > 1 && (
               <div className="flex items-center gap-1 text-[11px] text-slate-400">
                 <Filter className="w-3 h-3" />
                 <select
@@ -173,8 +173,8 @@ export const SearchIndexModal: React.FC<SearchIndexModalProps> = ({
                   }
                   className="bg-slate-950 border border-slate-700/80 rounded-md px-2 py-0.5 text-slate-200 focus:outline-none"
                 >
-                  <option value="all">All Chapters ({currentBook.chapters.length})</option>
-                  {currentBook.chapters.map((ch, idx) => (
+                  <option value="all">All Chapters ({(currentBook.chapters?.length || 0)})</option>
+                  {(currentBook.chapters || []).map((ch, idx) => (
                     <option key={ch.id} value={idx}>
                       {ch.title.slice(0, 30)}
                     </option>

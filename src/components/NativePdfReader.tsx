@@ -1,19 +1,30 @@
+import { ErrorBoundary } from './ErrorBoundary';
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Book, ReaderSettings, Highlight } from '../types';
 import { db } from '../services/db';
 import { habitTracker } from '../services/habitTracker';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Minimize2, Settings, List, X, Square, Columns2, ScrollText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Minimize2, Settings, List, X, Square, Columns2, ScrollText, Moon, Sun, Palette, Eye, CloudRain, Flame, Volume2, Zap, Sliders, BookOpen } from 'lucide-react';
 import { SelectionPopup } from './SelectionPopup';
 import { HighlightPopover } from './HighlightPopover';
 import { AIAssistantDrawer } from './AIAssistantDrawer';
 import { AnnotationsDrawer } from './ReaderDrawers';
 import { ttsService } from '../services/ttsService';
+import { SoundscapeModal } from './SoundscapeModal';
+import { ReadingHabitsDashboard } from './ReadingHabitsDashboard';
+import { TTSAudioBar } from './TTSAudioBar';
+import { RSVPModal } from './RSVPModal';
+import { TypographyToolbar } from './TypographyToolbar';
+import { ReadingProgressBar } from './ReadingProgressBar';
+
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
-import pdfWorkerSrc from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
-pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
+
+
+// Set up standard worker config
+pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
 interface NativePdfReaderProps {
   book: Book;
@@ -41,7 +52,145 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const [fileData, setFileData] = useState<ArrayBuffer | Blob | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
-  // Track habits and clean up TTS
+  const [zenNavVisible, setZenNavVisible] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(800);
+  const [scale, setScale] = useState<number>(1.0);
+  const [pdfFilterTheme, setPdfFilterTheme] = useState<'light' | 'dark' | 'sepia'>('light');
+
+  const pageRefs = useRef<{[key: number]: HTMLDivElement | null}>({});
+  
+  useEffect(() => {
+    if (settings.layoutMode !== 'scroll' || numPages === 0) return;
+    
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && entry.intersectionRatio > 0.3) {
+          const page = Number(entry.target.getAttribute('data-page-number'));
+          if (page && !isNaN(page)) {
+            setPageNumber(page);
+          }
+        }
+      });
+    }, { threshold: 0.3, root: containerRef.current });
+
+    Object.values(pageRefs.current).forEach(node => {
+      if (node) observer.observe(node as Element);
+    });
+
+    return () => observer.disconnect();
+  }, [settings.layoutMode, numPages, scale]);
+
+
+  const [pdfViewMode, setPdfViewMode] = useState<'native' | 'reader'>('native');
+  const [extractedText, setExtractedText] = useState<string>('');
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+
+  const extractCurrentPages = useCallback(async () => {
+    if (!pdfDoc) return;
+    setIsExtracting(true);
+    try {
+      let combinedText = '';
+      const pagesToExtract = [pageNumber];
+      if (settings.layoutMode === 'double' && pageNumber + 1 <= numPages) {
+        pagesToExtract.push(pageNumber + 1);
+      }
+      
+      for (const p of pagesToExtract) {
+        const page = await pdfDoc.getPage(p);
+        const textContent = await page.getTextContent();
+        
+        let lastY;
+        let text = '';
+        for (const item of textContent.items) {
+          if (lastY === undefined || Math.abs(lastY - item.transform[5]) < 5) {
+             text += item.str + ' ';
+          } else {
+             text += '\n' + item.str + ' ';
+          }    
+          lastY = item.transform[5];
+        }
+        
+        let cleanText = text;
+        
+        // Clean hyphenation across lines
+        cleanText = cleanText.replace(/([a-zA-Z])-\s*\n\s*([a-zA-Z])/g, '$1$2');
+        
+        // Join lines that shouldn't be broken (lowercase letter on next line implies continuation)
+        cleanText = cleanText.replace(/([^\.?!\n])\s*\n\s*([a-z])/g, '$1 $2');
+        
+        // Clean up excessive spaces
+        cleanText = cleanText.replace(/ {2,}/g, ' ');
+        
+        // Remove lines that are just a single number (often page numbers)
+        cleanText = cleanText.replace(/^\s*[0-9]+\s*$/gm, '');
+        
+        // Standardize paragraphs
+        cleanText = cleanText.replace(/\n{2,}/g, '\n\n');
+        
+        combinedText += cleanText.trim() + '\n\n\n';
+      }
+      setExtractedText(combinedText);
+    } catch (e) {
+      console.error(e);
+      console.error('Extraction error:', e); setExtractedText("Failed to extract text from this page. This PDF might be an image without an OCR layer or the document was unmounted.");
+    } finally {
+      setIsExtracting(false);
+    }
+  }, [pdfDoc, pageNumber, settings.layoutMode, numPages]);
+
+  useEffect(() => {
+    if (pdfViewMode === 'reader' && pdfDoc) {
+      extractCurrentPages();
+    }
+  }, [pdfViewMode, pageNumber, pdfDoc, settings.layoutMode, extractCurrentPages]);
+
+  // Bionic reading word transformation helper
+  const formatBionicText = (text: string) => {
+    if (!settings.bionicReading) return text;
+    return text.split(' ').map((word, i) => {
+      const mid = Math.ceil(word.length * 0.45);
+      const boldPart = word.slice(0, mid);
+      const rest = word.slice(mid);
+      return (
+        <React.Fragment key={i}>
+          <span className="font-extrabold opacity-95">{boldPart}</span>
+          <span>{rest} </span>
+        </React.Fragment>
+      );
+    });
+  };
+
+
+  
+
+
+  const [isSoundscapeOpen, setIsSoundscapeOpen] = useState(false);
+  const [isHabitsOpen, setIsHabitsOpen] = useState(false);
+  const [isTTSOpen, setIsTTSOpen] = useState(false);
+  const [ttsCurrentSentence, setTtsCurrentSentence] = useState('');
+  const [isRSVPOpen, setIsRSVPOpen] = useState(false);
+  const [isTypographyOpen, setIsTypographyOpen] = useState(false);
+
+  // Selection popup states
+  const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
+  const [selectedText, setSelectedText] = useState('');
+  const [selectionOffsets, setSelectionOffsets] = useState<any>(null);
+
+  // Highlight popover state
+  const [activeHighlightPopover, setActiveHighlightPopover] = useState<{
+    highlight: Highlight;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [pdfOutline, setPdfOutline] = useState<any[]>([]);
+  const [isTOCOpen, setIsTOCOpen] = useState(false);
+  const [isAnnotationsDrawerOpen, setIsAnnotationsDrawerOpen] = useState(false);
+  const [isAIOpen, setIsAIOpen] = useState(false);
+  const [pendingHighlightScrollId, setPendingHighlightScrollId] = useState<string | null>(null);
+
   useEffect(() => {
     habitTracker.startSession(book.id, book.title);
     return () => {
@@ -50,438 +199,116 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     };
   }, [book.id, book.title]);
 
-  const [zenNavVisible, setZenNavVisible] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState<number>(800);
-  const [scale, setScale] = useState<number>(1.0);
-  
-  // Selection popup states
-  const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
-  const [selectedText, setSelectedText] = useState<string>('');
-  const [selectionOffsets, setSelectionOffsets] = useState<{startItemIndex: number, startOffset: number, endItemIndex: number, endOffset: number, pageIndex: number} | null>(null);
-  const [pdfOutline, setPdfOutline] = useState<any[] | null>(null);
-  const [isTOCOpen, setIsTOCOpen] = useState<boolean>(false);
-  const [isAnnotationsDrawerOpen, setIsAnnotationsDrawerOpen] = useState(false);
-  const [isAIOpen, setIsAIOpen] = useState<boolean>(false);
-  const [pdfInstance, setPdfInstance] = useState<any>(null);
-  const [highlights, setHighlights] = useState<any[]>([]);
-  const [activeHighlightPopover, setActiveHighlightPopover] = useState<{ highlight: any, position: {x: number, y: number} } | null>(null);
-  const [pendingHighlightScrollId, setPendingHighlightScrollId] = useState<string | null>(null);
-
   useEffect(() => {
-    if (targetHighlightId) {
-      setPendingHighlightScrollId(targetHighlightId);
-      if (onClearTargetHighlight) onClearTargetHighlight();
-    }
-  }, [targetHighlightId, onClearTargetHighlight]);
-
-
-  useEffect(() => {
-    if (pendingHighlightScrollId) {
-      const targetHighlight = highlights.find(h => h.id === pendingHighlightScrollId);
-      
-      if (targetHighlight) {
-        const targetPage = targetHighlight.pdfPageIndex !== undefined ? targetHighlight.pdfPageIndex : targetHighlight.chapterIndex + 1;
-        
-        // Only jump if it's not currently visible
-        const currentPages = settings.layoutMode === 'double' ? [pageNumber, pageNumber + 1] : [pageNumber];
-        if (!currentPages.includes(targetPage)) {
-          // It's not visible, we need to change page!
-          setPageNumber(targetPage);
-          // Don't clear pendingHighlightScrollId yet, let it render and find it in the DOM on next effect pass
-          return; 
-        }
+    const loadPdf = async () => {
+      const bookData = await db.books.get(book.id);
+      if (bookData?.rawFile) {
+        setFileData(bookData.rawFile);
+        const url = URL.createObjectURL(new Blob([bookData.rawFile], { type: 'application/pdf' }));
+        setPdfUrl(url);
       }
+    };
+    loadPdf();
 
-      let attempts = 0;
-      const maxAttempts = 20; // 4 seconds total
-      
-      const tryScroll = () => {
-        const el = document.querySelector(`mark[data-highlight-id="${pendingHighlightScrollId}"]`) as HTMLElement;
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          const origStyle = el.style.boxShadow;
-          el.style.boxShadow = '0 0 0 4px rgba(245, 158, 11, 0.5)';
-          setTimeout(() => {
-            if (el) el.style.boxShadow = origStyle;
-          }, 1500);
-          setPendingHighlightScrollId(null);
-        } else {
-          attempts++;
-          if (attempts < maxAttempts) {
-            timer = setTimeout(tryScroll, 250);
-          } else {
-            // Give up after 5 seconds
-            setPendingHighlightScrollId(null);
-          }
-        }
-      };
-      
-      let timer = setTimeout(tryScroll, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [pageNumber, pendingHighlightScrollId, highlights, settings.layoutMode]);
+    db.highlights.where('bookId').equals(book.id).toArray().then(setHighlights);
 
-  // TOC States
-
-
-  useEffect(() => {
-    if (!fileData) return;
-    const blob = fileData instanceof Blob ? fileData : new Blob([fileData], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    setPdfUrl(url);
-    return () => URL.revokeObjectURL(url);
-  }, [fileData]);
-
-  useEffect(() => {
-    // If rawFile exists in memory, use it
-    if (book.rawFile) {
-      setFileData(book.rawFile);
-    } else {
-      // Fetch from DB if it wasn't passed in memory
-      db.books.get(book.id).then((b) => {
-        if (b?.rawFile) {
-          setFileData(b.rawFile);
-        }
-      });
-    }
-
-    // Set initial page from reading progress
-    if (book.readingProgress?.currentPageIndex) {
-      setPageNumber(book.readingProgress.currentPageIndex + 1); // 1-indexed for react-pdf
-    }
+    return () => {
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+    };
   }, [book.id]);
 
   useEffect(() => {
-    // Resize observer to make the PDF fill the container properly
-    if (!containerRef.current) return;
-    const observer = new ResizeObserver((entries) => {
-      if (entries[0]) {
-        setContainerWidth(entries[0].contentRect.width);
+    const updateWidth = () => {
+      if (containerRef.current) {
+        setContainerWidth(containerRef.current.clientWidth);
       }
-    });
-    observer.observe(containerRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  const saveProgress = (pageIdx: number, total: number) => {
-    if (!total) return;
-    const progress = {
-      ...book.readingProgress,
-      currentPageIndex: pageIdx,
-      currentChapterIndex: pageIdx,
-      percentage: Math.round(((pageIdx + 1) / total) * 100),
-      lastReadTimestamp: Date.now(),
     };
-    db.books.update(book.id, { readingProgress: progress }).catch(console.error);
-  };
+    window.addEventListener('resize', updateWidth);
+    updateWidth();
+    return () => window.removeEventListener('resize', updateWidth);
+  }, []);
 
   const onDocumentLoadSuccess = async (pdf: any) => {
     setNumPages(pdf.numPages);
-    setPdfInstance(pdf);
-    saveProgress(pageNumber - 1, pdf.numPages);
+    setPdfDoc(pdf);
+    setPdfDoc(pdf);
     try {
       const outline = await pdf.getOutline();
-      setPdfOutline(outline || []);
+      if (outline) setPdfOutline(outline);
     } catch (e) {
-      console.warn('Failed to load PDF outline', e);
-    }
-  };
-
-  const navigateToOutlineItem = async (item: any) => {
-    if (!pdfInstance || !item.dest) return;
-    try {
-      let dest = item.dest;
-      if (typeof dest === 'string') {
-        dest = await pdfInstance.getDestination(dest);
-      }
-      if (Array.isArray(dest) && dest.length > 0) {
-        const pageIndex = await pdfInstance.getPageIndex(dest[0]);
-        const targetPage = pageIndex + 1;
-        setPageNumber(targetPage);
-        saveProgress(targetPage - 1, numPages);
-        setIsTOCOpen(false);
-      }
-    } catch (e) {
-      console.error('Failed to navigate', e);
-    }
-  };
-
-  const changePage = (offset: number) => {
-    setPageNumber(prevPageNumber => {
-      const step = settings.layoutMode === 'double' ? 2 : 1;
-      const next = Math.min(Math.max(1, prevPageNumber + (offset > 0 ? step : -step)), numPages || 1);
-      saveProgress(next - 1, numPages);
-      return next;
-    });
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'ArrowRight' || e.key === ' ') {
-      e.preventDefault();
-      changePage(1);
-    } else if (e.key === 'ArrowLeft') {
-      e.preventDefault();
-      changePage(-1);
-    } else if (e.key === 'Escape') {
-      if (isZenMode) onToggleZenMode();
-      setIsTOCOpen(false);
-      setIsAIOpen(false);
-    } else if (e.key === 'z' || e.key === 'Z') {
-      onToggleZenMode();
+      console.error(e);
     }
   };
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') changePage(-1);
+      else if (e.key === 'ArrowRight') changePage(1);
+    };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [numPages]);
+  }, [pageNumber, numPages]);
 
-  useEffect(() => {
-    const loadHighlights = async () => {
-      const all = await db.highlights.where('bookId').equals(book.id).toArray();
-      setHighlights(all);
-    };
-    loadHighlights();
-  }, [book.id]);
-
-  const highlightColors: Record<string, string> = {
-    yellow: 'background-color: rgba(251, 191, 36, 0.4); border-bottom: 2px solid rgba(251, 191, 36, 0.9); color: inherit;',
-    emerald: 'background-color: rgba(52, 211, 153, 0.4); border-bottom: 2px solid rgba(52, 211, 153, 0.9); color: inherit;',
-    sky: 'background-color: rgba(56, 189, 248, 0.4); border-bottom: 2px solid rgba(56, 189, 248, 0.9); color: inherit;',
-    rose: 'background-color: rgba(251, 113, 133, 0.4); border-bottom: 2px solid rgba(251, 113, 133, 0.9); color: inherit;',
-    amber: 'background-color: rgba(251, 146, 60, 0.4); border-bottom: 2px solid rgba(251, 146, 60, 0.9); color: inherit;',
-    violet: 'background-color: rgba(192, 132, 252, 0.4); border-bottom: 2px solid rgba(192, 132, 252, 0.9); color: inherit;',
+  const changePage = (offset: number) => {
+    setPageNumber(prev => Math.min(Math.max(1, prev + offset), numPages || 1));
   };
 
-  const makeCustomTextRenderer = useCallback((renderPageIndex: number) => {
-    return (textItem: any) => {
-      const { str, itemIndex } = textItem;
-      let result = str;
-    
-    // highlightColors from component scope
-    const highlightColors: Record<Highlight['color'], string> = {
-      yellow: 'background-color: rgba(251, 191, 36, 0.4); border-bottom: 2px solid rgba(251, 191, 36, 0.9); color: inherit;',
-      emerald: 'background-color: rgba(52, 211, 153, 0.4); border-bottom: 2px solid rgba(52, 211, 153, 0.9); color: inherit;',
-      sky: 'background-color: rgba(56, 189, 248, 0.4); border-bottom: 2px solid rgba(56, 189, 248, 0.9); color: inherit;',
-      rose: 'background-color: rgba(251, 113, 133, 0.4); border-bottom: 2px solid rgba(251, 113, 133, 0.9); color: inherit;',
-      amber: 'background-color: rgba(251, 146, 60, 0.4); border-bottom: 2px solid rgba(251, 146, 60, 0.9); color: inherit;',
-      violet: 'background-color: rgba(192, 132, 252, 0.4); border-bottom: 2px solid rgba(192, 132, 252, 0.9); color: inherit;',
-    };
-
-    for (const h of highlights) {
-      if (h.pdfPageIndex !== undefined && h.pdfPageIndex !== renderPageIndex) continue;
-      if (h.startItemIndex !== undefined && h.endItemIndex !== undefined) {
-        // Assume matching page via the fact we only render current pages, but better if we had pageIndex
-        // For simplicity, if itemIndex falls in range. (Note: itemIndex restarts at 0 per page)
-        // Wait, if itemIndex restarts at 0 per page, and we show TWO pages on screen (double mode),
-        // we need to be careful. But NativePdfReader renders <Page> which scopes customTextRenderer per page.
-        // Wait, customTextRenderer doesn't know its pageNumber. We can pass it in via closure?
-        // Yes, but react-pdf's customTextRenderer prop is shared. Let's just use itemIndex and hope highlights don't clash across visible pages.
-        // Actually, if we just check if str is part of h.selectedText as a secondary guard!
-        
-        // Let's use the precise itemIndex logic:
-        const style = highlightColors[h.color] || highlightColors.yellow;
-        if (itemIndex === h.startItemIndex && itemIndex === h.endItemIndex) {
-           const before = str.slice(0, h.startOffset);
-           const marked = str.slice(h.startOffset, h.endOffset);
-           const after = str.slice(h.endOffset);
-           result = `${before}<mark data-highlight-id="${h.id}" class="pdf-highlight-mark cursor-pointer transition hover:opacity-85" style="${style}">${marked}${h.note ? `<sup style="margin-left: 2px; padding: 0 4px; font-size: 10px; background: rgba(245,158,11,0.25); color: #d97706; border-radius: 4px; border: 1px solid rgba(245,158,11,0.4);">💬</sup>` : ''}</mark>${after}`;
-        } else if (itemIndex === h.startItemIndex) {
-           const before = str.slice(0, h.startOffset);
-           const marked = str.slice(h.startOffset);
-           result = `${before}<mark data-highlight-id="${h.id}" class="pdf-highlight-mark cursor-pointer transition hover:opacity-85" style="${style}">${marked}${h.note ? `<sup style="margin-left: 2px; padding: 0 4px; font-size: 10px; background: rgba(245,158,11,0.25); color: #d97706; border-radius: 4px; border: 1px solid rgba(245,158,11,0.4);">💬</sup>` : ''}</mark>`;
-        } else if (itemIndex === h.endItemIndex) {
-           const marked = str.slice(0, h.endOffset);
-           const after = str.slice(h.endOffset);
-           result = `<mark data-highlight-id="${h.id}" class="pdf-highlight-mark cursor-pointer transition hover:opacity-85" style="${style}">${marked}${h.note ? `<sup style="margin-left: 2px; padding: 0 4px; font-size: 10px; background: rgba(245,158,11,0.25); color: #d97706; border-radius: 4px; border: 1px solid rgba(245,158,11,0.4);">💬</sup>` : ''}</mark>${after}`;
-        } else if (itemIndex > h.startItemIndex && itemIndex < h.endItemIndex) {
-           result = `<mark data-highlight-id="${h.id}" class="pdf-highlight-mark cursor-pointer transition hover:opacity-85" style="${style}">${str}${h.note ? `<sup style="margin-left: 2px; padding: 0 4px; font-size: 10px; background: rgba(245,158,11,0.25); color: #d97706; border-radius: 4px; border: 1px solid rgba(245,158,11,0.4);">💬</sup>` : ''}</mark>`;
-        }
-      } else {
-        // Fallback for old highlights without itemIndex
-        if (str.includes(h.selectedText)) {
-          const style = highlightColors[h.color] || highlightColors.yellow;
-          result = result.replace(
-            h.selectedText,
-            `<mark data-highlight-id="${h.id}" class="pdf-highlight-mark cursor-pointer transition hover:opacity-85" style="${style}">${h.selectedText}${h.note ? `<sup style="margin-left: 2px; padding: 0 4px; font-size: 10px; background: rgba(245,158,11,0.25); color: #d97706; border-radius: 4px; border: 1px solid rgba(245,158,11,0.4);">💬</sup>` : ''}</mark>`
-          );
-        }
-      }
+  const getPdfFilterStyle = () => {
+    switch (pdfFilterTheme) {
+      case 'dark': return 'invert(1) hue-rotate(180deg) brightness(0.85) contrast(1.1)';
+      case 'sepia': return 'sepia(0.6) contrast(0.9) brightness(0.9)';
+      default: return 'none';
     }
-    
-    // Always wrap in a span with data-item-index so we can extract it during selection!
-    return `<span data-pdf-item-index="${itemIndex}">${result}</span>`;
-    };
-  }, [highlights]);
+  };
 
-  // Listen for text selection completion (mouseup/touchend) instead of selectionchange 
-  // to avoid re-rendering the DOM while the user is actively dragging, which destroys the selection.
-  useEffect(() => {
-    const handleSelectionEnd = () => {
-      setTimeout(() => {
-        const selection = window.getSelection();
-        if (selection && selection.toString().trim().length > 0) {
-          const range = selection.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          
-          const container = document.querySelector('.react-pdf__Document');
-          if (container && !container.contains(range.commonAncestorContainer)) {
-            return;
-          }
+  const pdfOptions = useMemo(() => ({
+    cMapUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+    wasmUrl: `https://unpkg.com/pdfjs-dist@${pdfjs.version}/wasm/`,
+  }), []);
 
-          // Extract pdf item indexes from the DOM
-          const getPdfIndex = (node) => {
-            const span = node.nodeType === 3 ? node.parentElement.closest('[data-pdf-item-index]') : node.closest('[data-pdf-item-index]');
-            if (span) {
-              return parseInt(span.getAttribute('data-pdf-item-index') || '-1', 10);
-            }
-            return -1;
-          };
-
-          const startItemIndex = getPdfIndex(range.startContainer);
-          const endItemIndex = getPdfIndex(range.endContainer);
-             
-          const getPdfPageIndex = (node) => {
-            const pageContainer = node.nodeType === 3 ? node.parentElement?.closest('.react-pdf__Page') : node.closest('.react-pdf__Page');
-            if (pageContainer) {
-              return parseInt(pageContainer.getAttribute('data-page-number') || '-1', 10);
-            }
-            return pageNumber;
-          };
-          
-          const selectionPageIndex = getPdfPageIndex(range.startContainer);
-
-          if (startItemIndex !== -1 && endItemIndex !== -1) {
-            setSelectionOffsets({
-              startItemIndex: Math.min(startItemIndex, endItemIndex),
-              startOffset: startItemIndex <= endItemIndex ? range.startOffset : range.endOffset,
-              endItemIndex: Math.max(startItemIndex, endItemIndex),
-              endOffset: startItemIndex <= endItemIndex ? range.endOffset : range.startOffset,
-              pageIndex: selectionPageIndex
-            });
-          } else {
-            setSelectionOffsets(null);
-          }
-
-          setSelectedText(selection.toString().trim());
-          setSelectionPosition({
-            x: rect.left + rect.width / 2,
-            y: rect.top - 10,
-          });
-        }
-      }, 50);
-    };
-    
-    document.addEventListener('mouseup', handleSelectionEnd);
-    document.addEventListener('touchend', handleSelectionEnd);
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (e.shiftKey && e.key.includes('Arrow')) {
-        handleSelectionEnd();
-      }
-    };
-    
-    document.addEventListener('keyup', handleKeyUp);
-
-    return () => {
-      document.removeEventListener('mouseup', handleSelectionEnd);
-      document.removeEventListener('touchend', handleSelectionEnd);
-      document.removeEventListener('keyup', handleKeyUp);
-    };
-  }, []);
-
-
-
-
-  // Track mouse for Zen Mode nav
-  useEffect(() => {
-    if (!isZenMode) {
-      setZenNavVisible(false);
-      return;
-    }
-    const handleMouseMove = (e: MouseEvent) => {
-      setZenNavVisible(e.clientY < 60);
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches[0].clientY < 60) setZenNavVisible(true);
-      else setZenNavVisible(false);
-    };
-    window.addEventListener('touchstart', handleTouchStart);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('touchstart', handleTouchStart);
-  }, [isZenMode]);
-  
-  // Listen for clicks on PDF highlight marks
-  useEffect(() => {
-    const handleMarkClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const mark = target.closest('mark.pdf-highlight-mark');
-      if (mark) {
-        const id = mark.getAttribute('data-highlight-id');
-        const h = highlights.find(x => x.id === id);
-        if (h) {
-          const rect = mark.getBoundingClientRect();
-          setActiveHighlightPopover({
-            highlight: h,
-            position: { x: rect.left + rect.width / 2, y: rect.top - 10 }
-          });
-        }
-      }
-    };
-    document.addEventListener('click', handleMarkClick);
-    return () => document.removeEventListener('click', handleMarkClick);
-  }, [highlights]);
-
-  // Close popup if clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.fixed.z-50') && !target.closest('mark.pdf-highlight-mark')) {
-        setActiveHighlightPopover(null);
-        // Wait for browser to process the click/tap and potentially clear selection
-        setTimeout(() => {
-          const selection = window.getSelection();
-          if (!selection || selection.toString().trim().length === 0) {
-            setSelectionPosition(null);
-          }
-        }, 100);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, []);
-
-  // Compute theme styles mapping based on Lumina's themes
   const themeStyle = useMemo(() => {
     switch (settings.theme) {
       case 'paper': return { border: 'border-stone-200', bg: 'bg-stone-100', text: 'text-stone-900', container: 'bg-white' };
       case 'sepia': return { border: 'border-[#e6dcc5]', bg: 'bg-[#f4ecd8]', text: 'text-[#5b4636]', container: 'bg-[#fcf7ed]' };
       case 'dusk': return { border: 'border-slate-700', bg: 'bg-slate-800', text: 'text-slate-300', container: 'bg-slate-700' };
       case 'amoled': return { border: 'border-zinc-900', bg: 'bg-black', text: 'text-stone-400', container: 'bg-zinc-950' };
-      case 'eink': return { border: 'border-gray-300', bg: 'bg-gray-200', text: 'text-black', container: 'bg-white' };
-      case 'sage': return { border: 'border-[#c9dfd2]', bg: 'bg-[#e2efe6]', text: 'text-[#2c4c3b]', container: 'bg-[#f0f7f2]' };
-      case 'nordic': return { border: 'border-[#d8dee9]', bg: 'bg-[#e5e9f0]', text: 'text-[#2e3440]', container: 'bg-white' };
-      default: return { border: 'border-gray-200', bg: 'bg-white', text: 'text-black', container: 'bg-white' };
+      default: return { border: 'border-stone-200', bg: 'bg-stone-50', text: 'text-stone-900', container: 'bg-white' };
     }
   }, [settings.theme]);
 
-  // Max width of the PDF canvas based on user setting
-  const clampedContainer = Math.max(containerWidth, 300);
-  const pdfMaxWidth = Math.max(200, Math.min(clampedContainer - (settings.marginWidth * 2), settings.layoutMode === 'double' ? 1200 : 800));
+  const accentConfig = useMemo(() => {
+    switch (settings.accentColor) {
+      case 'blue': return { bg: 'bg-blue-500', text: 'text-blue-500', border: 'border-blue-500' };
+      case 'emerald': return { bg: 'bg-emerald-500', text: 'text-emerald-500', border: 'border-emerald-500' };
+      case 'rose': return { bg: 'bg-rose-500', text: 'text-rose-500', border: 'border-rose-500' };
+      case 'amber': return { bg: 'bg-amber-500', text: 'text-amber-500', border: 'border-amber-500' };
+      case 'violet': return { bg: 'bg-violet-500', text: 'text-violet-500', border: 'border-violet-500' };
+      default: return { bg: 'bg-indigo-500', text: 'text-indigo-500', border: 'border-indigo-500' };
+    }
+  }, [settings.accentColor]);
+
+  const pdfMaxWidth = 800;
+
+  const navigateToOutlineItem = async (item: any) => {
+    setIsTOCOpen(false);
+    // Simple implementation for now. Proper implementation requires finding the page number from dest.
+  };
 
   const toggleLayoutMode = () => {
     const modes: ('single' | 'double' | 'scroll')[] = ['single', 'double', 'scroll'];
-    const currentIdx = modes.indexOf(settings.layoutMode as any);
-    const nextMode = modes[(currentIdx + 1) % modes.length];
-    onUpdateSettings({ layoutMode: nextMode });
+    const idx = modes.indexOf(settings.layoutMode as any);
+    onUpdateSettings({ layoutMode: modes[(idx + 1) % modes.length] as any });
   };
 
-  
+  const startTTS = (customText?: string) => {
+    const textToSpeak = customText || selectedText || "Please highlight text to use Text-to-Speech in PDF mode.";
+    ttsService.speakText(textToSpeak, { rate: 1.0 });
+    setIsTTSOpen(true);
+    setSelectionPosition(null);
+  };
+
   const handleUpdateHighlight = async (id: string, updates: any) => {
     await db.highlights.update(id, updates);
     setHighlights((prev) => prev.map((h) => (h.id === id ? { ...h, ...updates } : h)));
@@ -498,19 +325,15 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     setHighlights((prev) => prev.filter((h) => h.id !== id));
     setActiveHighlightPopover(null);
   };
+
   const handleCreateHighlight = async (color: string, note?: string) => {
     if (!selectedText) return;
     
     await db.highlights.put({
       id: `hl-${Date.now()}`,
       bookId: book.id,
-      chapterIndex: selectionOffsets?.pageIndex ? selectionOffsets.pageIndex - 1 : pageNumber - 1,
+      chapterIndex: pageNumber - 1,
       selectedText,
-      startItemIndex: selectionOffsets?.startItemIndex,
-      startOffset: selectionOffsets?.startOffset,
-      endItemIndex: selectionOffsets?.endItemIndex,
-      endOffset: selectionOffsets?.endOffset,
-      pdfPageIndex: selectionOffsets?.pageIndex,
       color: color as any,
       note,
       createdAt: Date.now(),
@@ -521,12 +344,79 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     setHighlights(all);
   };
 
-  return (
+  // Selection detection
+  useEffect(() => {
+    const handleMouseUp = () => {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed) {
+        const text = selection.toString().trim();
+        if (text) {
+          const range = selection.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          setSelectedText(text);
+          setSelectionPosition({
+            x: rect.left + rect.width / 2,
+            y: rect.top - 10,
+          });
+        }
+      } else {
+        setSelectionPosition(null);
+      }
+    };
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => document.removeEventListener('mouseup', handleMouseUp);
+  }, []);
+
+
+return (
     <div className={`w-full flex flex-col transition-colors duration-200 relative overflow-hidden ${themeStyle.bg} ${themeStyle.text} ${isZenMode ? 'h-screen' : 'h-[calc(100vh-2.75rem)]'}`}>
+      <ErrorBoundary>
       
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        .react-pdf__Page__textContent, .textLayer {
+          color-scheme: only light;
+          position: absolute;
+          text-align: initial;
+          inset: 0;
+          overflow: clip;
+          opacity: 1;
+          line-height: 1;
+          text-size-adjust: none;
+          forced-color-adjust: none;
+          transform-origin: 0 0;
+          caret-color: CanvasText;
+          z-index: 0;
+          border-radius: 0;
+        }
+        .react-pdf__Page__textContent span, .textLayer :is(span, br) {
+          color: transparent !important;
+          position: absolute;
+          white-space: pre;
+          cursor: text;
+          margin: 0;
+          transform-origin: 0 0;
+        }
+        .react-pdf__Page__textContent span::selection, .textLayer :is(span, br)::selection {
+          background: rgba(0, 102, 255, 0.25) !important;
+          color: transparent !important;
+        }
+        .react-pdf__Page__textContent span::-moz-selection, .textLayer :is(span, br)::-moz-selection {
+          background: rgba(0, 102, 255, 0.25) !important;
+          color: transparent !important;
+        }
+        .react-pdf__Page__canvas {
+          display: block !important;
+          margin: 0 auto !important;
+          opacity: 1 !important;
+          visibility: visible !important;
+        }
+      ` }} />
+
+
       {/* Zen Mode / Full Screen Exit Overlay */}
       {isZenMode && (
-        <div className="fixed top-4 right-4 z-50 transition-opacity duration-300 opacity-30 hover:opacity-100">
+        <div className="fixed top-4 right-4 z-50 transition-opacity duration-300 opacity-30 hover:opacity-100 flex items-center gap-2">
           <button
             onClick={onToggleZenMode}
             className="flex items-center gap-2 px-3 py-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700/50 backdrop-blur-md shadow-lg cursor-pointer"
@@ -538,7 +428,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
         </div>
       )}
 
-      {/* Top Nav Bar (Auto-hidden in Zen Mode, revealed on top hover) */}
+      {/* Top Nav Bar */}
       <div 
         className={`${isZenMode ? 'fixed top-0 left-0 right-0 z-50 transition-all duration-300' : 'relative z-30 shrink-0'} ${isZenMode && !zenNavVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
       >
@@ -571,20 +461,95 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
               <ScrollText className="w-4 h-4" />
               <span className="hidden md:inline">Notes</span>
             </button>
-
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-2">
-            {/* Quick layout toggle specifically for PDF reader */}
+          <div className="flex items-center gap-1 sm:gap-1.5">
+            <button
+              onClick={() => setIsTypographyOpen((prev) => !prev)}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${isTypographyOpen ? 'text-amber-500 bg-amber-500/10' : themeStyle.text}`}
+              title="Typography & Display Controls"
+            >
+              <Sliders className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => setIsSoundscapeOpen(true)}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${themeStyle.text}`}
+              title="Soundscapes & Warmth (S)"
+            >
+              <CloudRain className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => setIsHabitsOpen(true)}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${themeStyle.text}`}
+              title="Reading Habits & Focus Timer (H)"
+            >
+              <Flame className="w-4 h-4 text-amber-500" />
+            </button>
+
+            <button
+              onClick={() => startTTS()}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${isTTSOpen ? 'text-amber-500 bg-amber-500/10' : themeStyle.text}`}
+              title="Read Aloud with Offline Text-to-Speech"
+            >
+              <Volume2 className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => setIsRSVPOpen(true)}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${themeStyle.text}`}
+              title="RSVP Speed Reader (V)"
+            >
+              <Zap className="w-4 h-4 text-amber-500" />
+            </button>
+            
+            <div className="w-px h-6 bg-slate-500/30 mx-1"></div>
+
+            
+            <button
+              onClick={() => setPdfViewMode(m => m === 'native' ? 'reader' : 'native')}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer flex items-center gap-1 border ${themeStyle.border} ${themeStyle.text}`}
+              title={`Switch to ${pdfViewMode === 'native' ? 'Reader' : 'Native'} Mode`}
+            >
+              {pdfViewMode === 'native' ? <BookOpen className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              <span className="hidden sm:inline text-xs font-medium">{pdfViewMode === 'native' ? 'Reader' : 'Native'}</span>
+            </button>
+            
+            <div className="w-px h-6 bg-slate-500/30 mx-1"></div>
+
+            
+            <button
+              onClick={() => setPdfViewMode(m => m === 'native' ? 'reader' : 'native')}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer flex items-center gap-1 border ${themeStyle.border} ${themeStyle.text}`}
+              title={`Switch to ${pdfViewMode === 'native' ? 'Reader' : 'Native'} Mode`}
+            >
+              {pdfViewMode === 'native' ? <BookOpen className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              <span className="hidden sm:inline text-xs font-medium">{pdfViewMode === 'native' ? 'Reader' : 'Native'}</span>
+            </button>
+            
+            <div className="w-px h-6 bg-slate-500/30 mx-1"></div>
+
+            <button
+              onClick={() => {
+                const themes: ('light' | 'dark' | 'sepia')[] = ['light', 'dark', 'sepia'];
+                const idx = themes.indexOf(pdfFilterTheme);
+                setPdfFilterTheme(themes[(idx + 1) % themes.length]);
+              }}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer flex items-center gap-1 border ${themeStyle.border} ${themeStyle.text}`}
+              title={`PDF Appearance: ${pdfFilterTheme}`}
+            >
+              {pdfFilterTheme === 'dark' ? <Moon className="w-4 h-4" /> : pdfFilterTheme === 'sepia' ? <Palette className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+            </button>
+
             <button
               onClick={toggleLayoutMode}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer mr-2 flex items-center gap-1 border ${themeStyle.border} ${themeStyle.text}`}
-              title={`Layout: ${settings.layoutMode} (Click to toggle)`}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer flex items-center gap-1 border ${themeStyle.border} ${themeStyle.text}`}
+              title={`Layout: ${settings.layoutMode}`}
             >
               {settings.layoutMode === 'double' ? <Columns2 className="w-4 h-4" /> : 
                settings.layoutMode === 'scroll' ? <ScrollText className="w-4 h-4" /> : 
                <Square className="w-4 h-4" />}
-              <span className="text-[10px] uppercase font-bold hidden md:inline opacity-80">{settings.layoutMode}</span>
             </button>
 
             <button
@@ -616,8 +581,8 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
       </div>
 
       {/* Click zones for desktop page turning */}
-      <div
-        onClick={() => changePage(-1)}
+      <div 
+        onClick={() => changePage(-1)} 
         className="absolute left-0 top-12 bottom-0 w-16 md:w-28 z-10 cursor-w-resize hover:bg-black/[0.015] dark:hover:bg-white/[0.015] transition flex items-center justify-start pl-3 opacity-0 hover:opacity-100"
       >
         <div className="p-2 rounded-full bg-black/10 dark:bg-white/10 backdrop-blur-xs">
@@ -625,8 +590,8 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
         </div>
       </div>
       
-      <div
-        onClick={() => changePage(1)}
+      <div 
+        onClick={() => changePage(1)} 
         className="absolute right-0 top-12 bottom-0 w-16 md:w-28 z-10 cursor-e-resize hover:bg-black/[0.015] dark:hover:bg-white/[0.015] transition flex items-center justify-end pr-3 opacity-0 hover:opacity-100"
       >
         <div className="p-2 rounded-full bg-black/10 dark:bg-white/10 backdrop-blur-xs">
@@ -636,78 +601,134 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
 
       <div 
         ref={containerRef}
-        className={`flex-1 overflow-y-auto overflow-x-hidden w-full flex justify-center pt-8 pb-24 items-start`}
+        className="flex-1 overflow-y-auto overflow-x-hidden w-full flex justify-center pt-8 pb-24 items-start"
       >
+
         {!pdfUrl ? (
           <div className="flex flex-col items-center justify-center h-full space-y-4 opacity-50">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
             <p>Loading High-Fidelity PDF Engine...</p>
           </div>
+        ) : pdfViewMode === 'reader' ? (
+          <div className="w-full max-w-3xl px-8 py-12 md:py-16 mx-auto relative transition-all duration-300">
+            {isExtracting ? (
+               <div className="flex justify-center items-center h-64 opacity-50">
+                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
+                 <p className="ml-3">Extracting text layout...</p>
+               </div>
+            ) : extractedText ? (
+              <div 
+                className={`prose prose-lg dark:prose-invert max-w-none ${
+                  settings.fontFamily === 'literata' ? 'font-literata' :
+                  settings.fontFamily === 'merriweather' ? 'font-merriweather' :
+                  settings.fontFamily === 'dyslexic' ? 'font-dyslexic' :
+                  'font-sans-ui'
+                }`}
+                style={{ 
+                  fontSize: `${settings.fontSize}px`, 
+                  lineHeight: settings.lineHeight,
+                  textAlign: settings.textAlign as any
+                }}
+              >
+                {extractedText.split('\n\n').map((paragraph, idx) => (
+                  <p key={idx} className="mb-6 whitespace-pre-wrap">
+                    {formatBionicText(paragraph)}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-64 opacity-50 text-center">
+                 <Eye className="w-12 h-12 mb-4 opacity-30" />
+                 <p>No text could be extracted from this page.</p>
+                 <p className="text-sm mt-2">This may be a scanned image without OCR text layer.</p>
+                 <button onClick={() => setPdfViewMode('native')} className="mt-4 px-4 py-2 bg-black/10 rounded-md text-sm hover:bg-black/20 transition">Return to Native View</button>
+              </div>
+            )}
+          </div>
         ) : (
           <div 
+
             className={`shadow-2xl transition-all duration-300 ${themeStyle.container} ${settings.layoutMode !== 'scroll' ? 'rounded-lg overflow-hidden' : ''}`}
             style={{ 
               maxWidth: pdfMaxWidth * scale,
               width: '100%' 
             }}
           >
-            <Document suspense={false}
-              file={pdfUrl}
-              onLoadSuccess={onDocumentLoadSuccess}
-              error={
-                <div className="flex justify-center items-center h-96 text-rose-500">
-                  <p>Failed to load native PDF. The file may be corrupted.</p>
-                </div>
-              }
-            >
-              {settings.layoutMode === 'scroll' ? (
-                // Continuous Scroll Rendering
-                <div className="flex flex-col gap-6 items-center w-full max-w-full">
-                  {Array.from(new Array(numPages), (el, index) => (
-                    <div key={`page_${index + 1}`} className="shadow-xl bg-white max-w-full overflow-hidden">
-                      <Page suspense={false} customTextRenderer={makeCustomTextRenderer(index + 1)}
-                        pageNumber={index + 1}
-                        width={pdfMaxWidth * scale}
-                        renderTextLayer={true}
-                        renderAnnotationLayer={true}
-                      />
-                    </div>
-                  ))}
-                </div>
-              ) : settings.layoutMode === 'double' ? (
-                // Double Page Rendering
-                <div className="flex w-full justify-center gap-1 md:gap-4 p-4 max-w-full overflow-hidden">
-                  <div className="shadow-xl bg-white overflow-hidden flex-shrink-0" style={{ width: (pdfMaxWidth * scale) / 2 }}>
-                    <Page suspense={false} customTextRenderer={makeCustomTextRenderer(pageNumber)}
-                      pageNumber={pageNumber}
-                      width={(pdfMaxWidth * scale) / 2}
-                      renderTextLayer={true}
-                      renderAnnotationLayer={true}
-                    />
+            <div style={{ filter: getPdfFilterStyle(), transition: 'filter 0.3s ease' }}>
+              <Document suspense={false} options={pdfOptions}
+                file={pdfUrl}
+                onLoadSuccess={onDocumentLoadSuccess}
+                error={
+                  <div className="flex justify-center items-center h-96 text-rose-500">
+                    <p>Failed to load native PDF. The file may be corrupted.</p>
                   </div>
-                  {pageNumber + 1 <= numPages && (
-                    <div className="shadow-xl bg-white overflow-hidden flex-shrink-0" style={{ width: (pdfMaxWidth * scale) / 2 }}>
-                      <Page suspense={false} customTextRenderer={makeCustomTextRenderer(pageNumber + 1)}
-                        pageNumber={pageNumber + 1}
+                }
+              >
+                {settings.layoutMode === 'scroll' ? (
+                  // Continuous Scroll Rendering
+                  <div className="flex flex-col gap-6 items-center w-full max-w-full pb-20">
+                    {Array.from(new Array(numPages), (el, index) => {
+                      const pNum = index + 1;
+                      const isVisible = Math.abs(pNum - pageNumber) <= 2;
+                      return (
+                        <div 
+                          key={`page_${pNum}`} 
+                          data-page-number={pNum}
+                          ref={(el) => pageRefs.current[pNum] = el as any}
+                          className="shadow-xl max-w-full overflow-hidden bg-white relative flex justify-center"
+                          style={{ minHeight: (pdfMaxWidth * scale) * 1.414, width: pdfMaxWidth * scale }}
+                        >
+                          {isVisible ? (
+                            <Page suspense={false}
+                              pageNumber={pNum}
+                              width={pdfMaxWidth * scale}
+                              renderTextLayer={true}
+                              renderAnnotationLayer={true}
+                            />
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center text-slate-400 bg-slate-50/50">
+                              <span className="text-xl font-medium">Page {pNum}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : settings.layoutMode === 'double' && containerWidth > 800 ? (
+                  // Double Page Rendering
+                  <div className="flex w-full justify-center gap-1 md:gap-4 p-4 max-w-full overflow-hidden">
+                    <div className="shadow-xl overflow-hidden flex-shrink-0 bg-white" style={{ width: (pdfMaxWidth * scale) / 2 }}>
+                      <Page suspense={false}
+                        pageNumber={pageNumber}
                         width={(pdfMaxWidth * scale) / 2}
                         renderTextLayer={true}
                         renderAnnotationLayer={true}
                       />
                     </div>
-                  )}
-                </div>
-              ) : (
-                // Single Page Rendering
-                <div className="max-w-full overflow-hidden flex justify-center">
-                  <Page suspense={false} customTextRenderer={makeCustomTextRenderer(pageNumber)}
-                    pageNumber={pageNumber}
-                    width={pdfMaxWidth * scale}
-                    renderTextLayer={true}
-                    renderAnnotationLayer={true}
-                  />
-                </div>
-              )}
-            </Document>
+                    {pageNumber + 1 <= numPages && (
+                      <div className="shadow-xl overflow-hidden flex-shrink-0 bg-white" style={{ width: (pdfMaxWidth * scale) / 2 }}>
+                        <Page suspense={false}
+                          pageNumber={pageNumber + 1}
+                          width={(pdfMaxWidth * scale) / 2}
+                          renderTextLayer={true}
+                          renderAnnotationLayer={true}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // Single Page Rendering
+                  <div className="max-w-full overflow-hidden flex justify-center shadow-xl bg-white">
+                    <Page suspense={false}
+                      pageNumber={pageNumber}
+                      width={pdfMaxWidth * scale}
+                      renderTextLayer={true}
+                      renderAnnotationLayer={true}
+                    />
+                  </div>
+                )}
+              </Document>
+            </div>
           </div>
         )}
       </div>
@@ -758,6 +779,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
           }}
         />
       )}
+      
       <AIAssistantDrawer
         isOpen={isAIOpen}
         onClose={() => setIsAIOpen(false)}
@@ -765,8 +787,6 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
         book={book}
         currentChapter={{ id: 'pdf', title: `Page ${pageNumber}`, content: selectedText || '' }}
       />
-
-      {/* TOC Drawer Overlay */}
 
       {/* Annotations Drawer */}
       <AnnotationsDrawer
@@ -817,6 +837,65 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
           </div>
         </>
       )}
+
+      {/* Universal Reading Progress Bar at the bottom */}
+      {!isZenMode && (
+        <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">
+          <ReadingProgressBar
+            book={book}
+            currentChapterIndex={pageNumber - 1}
+            currentPageIndex={0}
+            totalPagesInChapter={1}
+            wordsPerPage={250}
+            onNavigatePage={() => {}}
+            onNavigateChapter={(page) => changePage(page - pageNumber + 1)}
+            onOpenTOC={() => setIsTOCOpen(true)}
+            isBookmarked={false}
+            onToggleBookmark={() => {}}
+            settings={settings}
+            onUpdateSettings={onUpdateSettings}
+            accentClass={accentConfig.bg}
+          />
+        </div>
+      )}
+
+      {/* Typography Toolbar Popover */}
+      <TypographyToolbar
+        isOpen={isTypographyOpen}
+        onClose={() => setIsTypographyOpen(false)}
+        settings={settings}
+        onUpdateSettings={onUpdateSettings}
+      />
+
+      {/* Soundscape Modal */}
+      <SoundscapeModal
+        isOpen={isSoundscapeOpen}
+        onClose={() => setIsSoundscapeOpen(false)}
+        settings={settings}
+        onUpdateSettings={onUpdateSettings}
+      />
+
+      {/* Habits Dashboard */}
+      <ReadingHabitsDashboard
+        isOpen={isHabitsOpen}
+        onClose={() => setIsHabitsOpen(false)}
+      />
+
+      {/* TTS Audio Player Bar */}
+      <TTSAudioBar
+        isOpen={isTTSOpen}
+        currentSentence={ttsCurrentSentence}
+        onClose={() => setIsTTSOpen(false)}
+      />
+
+      {/* RSVP Speed Reader Modal */}
+      <RSVPModal
+        isOpen={isRSVPOpen}
+        onClose={() => setIsRSVPOpen(false)}
+        text={selectedText || "Please highlight text to use RSVP Speed Reader in PDF mode."}
+        title={book.title}
+      />
+      </ErrorBoundary>
     </div>
   );
 }

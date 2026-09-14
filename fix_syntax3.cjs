@@ -1,56 +1,9 @@
 const fs = require('fs');
 let content = fs.readFileSync('src/components/NativePdfReader.tsx', 'utf8');
 
-// The error is because we injected `{pdfViewMode === 'reader' ? (` inside `{settings.layoutMode === 'scroll' ? (` which breaks the JSX flow or we injected it inside the <Document> tag where it isn't expected in that structure.
-// Let's replace the whole inner Document block safely.
+const regex = /\{settings\.layoutMode === 'scroll' \? \(\n\s*\/\/ Continuous Scroll Rendering\n\s*\{pdfViewMode === 'reader' \? \([\s\S]*?<\/Document>/;
 
-const badStructureRegex = /\{pdfViewMode === 'reader' \? \([\s\S]*?\)\s*<\/Document>/;
-
-content = content.replace(badStructureRegex, `</Document>`); // Just clean it up first
-
-// We want to put the reader mode outside the <Document>
-const documentWrapRegex = /<div style=\{\{ filter: getPdfFilterStyle\(\), transition: 'filter 0\.3s ease' \}\}>[\s\S]*?<\/Document>\s*<\/div>/;
-
-const newDocumentWrap = `{pdfViewMode === 'reader' ? (
-              <div className={\`w-full h-full min-h-[60vh] overflow-y-auto px-6 py-12 flex justify-center \${themeStyle.bg}\`}>
-                <div 
-                  className={\`max-w-3xl w-full flex flex-col gap-6 \${settings.fontFamily} \${themeStyle.text}\`}
-                  style={{
-                    fontSize: \`\${settings.fontSize}px\`,
-                    lineHeight: settings.lineHeight,
-                    textAlign: settings.textAlign as any
-                  }}
-                >
-                  {isExtractingText && !extractedPageText[pageNumber] ? (
-                    <div className="flex justify-center items-center h-40 opacity-60">Extracting text...</div>
-                  ) : (
-                    <>
-                      {extractedPageText[pageNumber]?.map((p, i) => (
-                        <p key={\`p1-\${i}\`} className="indent-6">{formatBionicText(p)}</p>
-                      ))}
-                      {settings.layoutMode === 'double' && pageNumber + 1 <= numPages && extractedPageText[pageNumber + 1]?.map((p, i) => (
-                        <p key={\`p2-\${i}\`} className="indent-6">{formatBionicText(p)}</p>
-                      ))}
-                      
-                      {!extractedPageText[pageNumber] || extractedPageText[pageNumber].length === 0 ? (
-                         <div className="flex justify-center items-center h-40 opacity-60 italic text-sm">No text found on this page. If this is a scanned document, it may be an image without a text layer.</div>
-                      ) : null}
-                    </>
-                  )}
-                </div>
-              </div>
-            ) : (
-            <div style={{ filter: getPdfFilterStyle(), transition: 'filter 0.3s ease' }}>
-            <Document suspense={false} options={pdfOptions}
-              file={pdfUrl}
-              onLoadSuccess={onDocumentLoadSuccess}
-              error={
-                <div className="flex justify-center items-center h-96 text-rose-500">
-                  <p>Failed to load native PDF. The file may be corrupted.</p>
-                </div>
-              }
-            >
-              {settings.layoutMode === 'scroll' ? (
+content = content.replace(regex, `{settings.layoutMode === 'scroll' ? (
                 // Continuous Scroll Rendering
                 <div className="flex flex-col gap-6 items-center w-full max-w-full">
                   {Array.from(new Array(numPages), (el, index) => (
@@ -97,10 +50,6 @@ const newDocumentWrap = `{pdfViewMode === 'reader' ? (
                   />
                 </div>
               )}
-            </Document>
-            </div>
-            )}`;
-
-content = content.replace(documentWrapRegex, newDocumentWrap);
+            </Document>`);
 
 fs.writeFileSync('src/components/NativePdfReader.tsx', content);
