@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BookOpen,
   Wifi,
@@ -19,6 +19,7 @@ import {
 import { usePlatform } from '../hooks/usePlatform';
 import { usePWAInstall } from '../hooks/usePWAInstall';
 import { ambientAudio } from '../services/ambientAudio';
+import { habitTracker } from '../services/habitTracker';
 
 interface DesktopTitleBarProps {
   currentBookTitle?: string;
@@ -52,8 +53,10 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
   const { platform, isStandalone } = usePlatform();
   const { isInstallable, install } = usePWAInstall();
   const [isPlayingAudio, setIsPlayingAudio] = React.useState(ambientAudio.isPlaying());
+  const [streak, setStreak] = React.useState<number>(0);
 
   React.useEffect(() => {
+    habitTracker.getHabitStats().then(stats => setStreak(stats.currentStreak));
     const unsub = ambientAudio.onStateChange((_t, playing) => {
       setIsPlayingAudio(playing);
     });
@@ -164,10 +167,13 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         {onOpenHabits && (
           <button
             onClick={onOpenHabits}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-amber-400 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer border border-transparent hover:border-slate-700"
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-amber-400 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer border border-transparent hover:border-slate-700"
             title="Reading Habits, Streaks & Pomodoro Timer (H)"
           >
-            <Flame className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+            <div className="flex items-center gap-0.5">
+              <Flame className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              {streak > 0 && <span className="text-[11px] font-bold font-mono">{streak}</span>}
+            </div>
             <span className="text-xs font-medium hidden md:inline">Habits</span>
           </button>
         )}

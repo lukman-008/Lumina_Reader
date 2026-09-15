@@ -243,6 +243,27 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   }, [currentChapter.content, wordsPerPage]);
 
   const totalPagesInChapter = pages.length;
+
+  useEffect(() => {
+    if (settings.layoutMode !== 'scroll') return;
+    
+    const handleScroll = () => {
+      if (!contentAreaRef.current) return;
+      
+      const { scrollTop, scrollHeight, clientHeight } = contentAreaRef.current;
+      const scrollRatio = scrollTop / (scrollHeight - clientHeight || 1);
+      
+      const estimatedPage = Math.floor(scrollRatio * totalPagesInChapter);
+      setCurrentPageIndex(Math.min(Math.max(0, estimatedPage), totalPagesInChapter - 1));
+    };
+
+    const container = contentAreaRef.current;
+    if (container) {
+      container.addEventListener('scroll', handleScroll);
+      return () => container.removeEventListener('scroll', handleScroll);
+    }
+  }, [settings.layoutMode, totalPagesInChapter]);
+
   const safePageIndex = Math.min(currentPageIndex, Math.max(0, totalPagesInChapter - 1));
   const activePageParagraphs = pages[safePageIndex] || [];
 
@@ -288,7 +309,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       if (targetHighlight && targetHighlight.chapterIndex === currentChapterIndex) {
         if (settings.layoutMode !== 'scroll') {
           const searchStr = targetHighlight.selectedText.split('\n')[0].trim();
-          const foundPageIdx = pages.findIndex(page => page.some(p => p.includes(searchStr) || targetHighlight.selectedText.includes(p.trim())));
+          const foundPageIdx = pages.findIndex(page => page.some(p => p.text.includes(searchStr) || targetHighlight.selectedText.includes(p.text.trim())));
           if (foundPageIdx !== -1 && foundPageIdx !== safePageIndex) {
             setCurrentPageIndex(foundPageIdx);
             return; 
@@ -325,27 +346,63 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
 
   // Navigation handlers
   const handleNextPage = () => {
+    if (settings.layoutMode === 'scroll') {
+      const container = contentAreaRef.current;
+      if (container) {
+        const { scrollTop, scrollHeight, clientHeight } = container;
+        if (scrollTop + clientHeight >= scrollHeight - 10) {
+          if (currentChapterIndex < (book.chapters || []).length - 1) {
+            setCurrentChapterIndex((prev) => prev + 1);
+            setCurrentPageIndex(0);
+            container.scrollTo({ top: 0, behavior: 'smooth' });
+          } else {
+            setIsAutoPacing(false);
+          }
+        } else {
+          container.scrollBy({ top: clientHeight * 0.85, behavior: 'smooth' });
+        }
+      }
+      return;
+    }
+
     if (safePageIndex < totalPagesInChapter - 1) {
       setCurrentPageIndex((prev) => prev + 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      contentAreaRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (currentChapterIndex < (book.chapters || []).length - 1) {
       setCurrentChapterIndex((prev) => prev + 1);
       setCurrentPageIndex(0);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      contentAreaRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       setIsAutoPacing(false);
     }
   };
 
   const handlePrevPage = () => {
+    if (settings.layoutMode === 'scroll') {
+      const container = contentAreaRef.current;
+      if (container) {
+        const { scrollTop, clientHeight } = container;
+        if (scrollTop <= 10) {
+          if (currentChapterIndex > 0) {
+            setCurrentChapterIndex(currentChapterIndex - 1);
+            setCurrentPageIndex(0);
+            container.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        } else {
+          container.scrollBy({ top: -(clientHeight * 0.85), behavior: 'smooth' });
+        }
+      }
+      return;
+    }
+
     if (safePageIndex > 0) {
       setCurrentPageIndex((prev) => prev - 1);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      contentAreaRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (currentChapterIndex > 0) {
       const prevChIndex = currentChapterIndex - 1;
       setCurrentChapterIndex(prevChIndex);
       setCurrentPageIndex(0);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      contentAreaRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
@@ -458,7 +515,8 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
             preSelectionRange.setEnd(range.startContainer, range.startOffset);
             sOffset = preSelectionRange.toString().length;
             eOffset = sOffset + selection.toString().length;
-            setSelectionOffsets({ startOffset: sOffset, endOffset: eOffset });
+            const itemIndex = parseInt(pElem.getAttribute('data-paragraph-index') || '0', 10);
+            setSelectionOffsets({ startOffset: sOffset, endOffset: eOffset, startItemIndex: itemIndex });
           } else {
             setSelectionOffsets(null);
           }
@@ -582,7 +640,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         setBookmarks((prev) => prev.filter((b) => b.id !== existing.id));
       }
     } else {
-      const snippet = activePageParagraphs[0]?.slice(0, 90) || currentChapter.title;
+      const snippet = activePageParagraphs[0]?.text?.slice(0, 90) || currentChapter.title;
       const newBm: Bookmark = {
         id: 'bm-' + Date.now(),
         bookId: book.id,
@@ -604,8 +662,17 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
 
   // TTS Start
   const startTTS = (customText?: string) => {
-    const textToSpeak = customText || activePageParagraphs.join(' ');
-    ttsService.speakText(textToSpeak, { rate: 1.0 });
+    let textToSpeak = customText;
+    if (!textToSpeak) {
+      if (settings.layoutMode === 'scroll') {
+        textToSpeak = currentChapter.content;
+      } else {
+        const currentGlobalIndex = activePageParagraphs[0]?.globalIndex || 0;
+        const paragraphs = currentChapter.content.split('\n\n').filter(Boolean);
+        textToSpeak = paragraphs.slice(currentGlobalIndex).join(' ');
+      }
+    }
+    ttsService.speakText(textToSpeak || '', { rate: 1.0 });
     setIsTTSOpen(true);
     setSelectionPosition(null);
   };
@@ -924,10 +991,17 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
             {/* Ambient Soundscapes */}
             <button
               onClick={() => setIsSoundscapeOpen(true)}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${themeStyle.subtext}`}
+              className={`p-1.5 rounded-lg transition cursor-pointer relative ${
+                settings.soundscape && settings.soundscape !== 'none'
+                  ? 'bg-amber-500/20 text-amber-500 hover:bg-amber-500/30 ring-1 ring-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
+                  : `hover:bg-black/5 dark:hover:bg-white/10 ${themeStyle.subtext}`
+              }`}
               title="Soundscapes & Warmth (S)"
             >
               <CloudRain className="w-4 h-4" />
+              {settings.soundscape && settings.soundscape !== 'none' && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              )}
             </button>
 
             {/* Reading Habits & Pomodoro */}
@@ -942,12 +1016,15 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
             {/* TTS Audio Player button */}
             <button
               onClick={() => startTTS()}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${
-                isTTSOpen ? accentConfig.text : themeStyle.subtext
+              className={`p-1.5 rounded-lg transition cursor-pointer relative ${
+                isTTSOpen ? 'bg-amber-500/20 text-amber-500 ring-1 ring-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)] hover:bg-amber-500/30' : `hover:bg-black/5 dark:hover:bg-white/10 ${themeStyle.subtext}`
               }`}
               title="Read Aloud with Offline Text-to-Speech"
             >
               <Volume2 className="w-4 h-4" />
+              {isTTSOpen && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              )}
             </button>
 
             {/* Bookmark button */}
@@ -1061,6 +1138,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         onJumpToHighlight={(h) => {
           setCurrentChapterIndex(h.chapterIndex);
           setPendingHighlightScrollId(h.id);
+          setIsAnnotationsDrawerOpen(false);
         }}
         onUpdateBookmark={handleUpdateBookmark}
         bookTitle={book.title}
@@ -1080,7 +1158,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         isOpen={isRSVPOpen}
         onClose={() => setIsRSVPOpen(false)}
         text={currentChapter.content}
-        title={currentChapter.title}
+        chapterTitle={currentChapter.title}
       />
 
       {/* Soundscape Modal */}
@@ -1133,8 +1211,8 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
 
       {/* Search in Book Modal */}
       {isSearchOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 text-slate-100 flex flex-col max-h-[80vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={() => setIsSearchOpen(false)}>
+          <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 text-slate-100 flex flex-col max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div className="flex items-center gap-2">
                 <Search className="w-4 h-4 text-amber-400" />
@@ -1232,6 +1310,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
             paddingRight: `${settings.marginWidth}px`,
             fontSize: `${settings.fontSize}px`,
             lineHeight: settings.lineHeight,
+            letterSpacing: `${settings.letterSpacing || 0}px`,
             textAlign: settings.textAlign,
           }}
           className={`mx-auto w-full pt-8 pb-16 reading-content ${FONT_CLASSES[settings.fontFamily]}`}
@@ -1268,6 +1347,38 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
           ) : settings.layoutMode === 'scroll' ? (
             <div className="space-y-5 leading-relaxed">
               {currentChapter.content.split('\n\n').map((text, idx) => renderParagraphBlock({text, globalIndex: idx}, idx))}
+              <div className="mt-16 pt-8 border-t border-current/10 flex items-center justify-between">
+                <button
+                  onClick={() => {
+                    if (currentChapterIndex > 0) {
+                      setCurrentChapterIndex(prev => prev - 1);
+                      setCurrentPageIndex(0);
+                      contentAreaRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                  }}
+                  disabled={currentChapterIndex === 0}
+                  className={`px-4 py-2 rounded-xl transition cursor-pointer text-sm font-medium ${
+                    currentChapterIndex === 0 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-current/5'
+                  }`}
+                >
+                  ← Previous Chapter
+                </button>
+                <button
+                  onClick={() => {
+                    if (currentChapterIndex < (book.chapters || []).length - 1) {
+                      setCurrentChapterIndex(prev => prev + 1);
+                      setCurrentPageIndex(0);
+                      contentAreaRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+                    }
+                  }}
+                  disabled={currentChapterIndex >= (book.chapters || []).length - 1}
+                  className={`px-4 py-2 rounded-xl transition cursor-pointer text-sm font-medium ${
+                    currentChapterIndex >= (book.chapters || []).length - 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-current/5'
+                  }`}
+                >
+                  Next Chapter →
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-5 leading-relaxed">

@@ -116,8 +116,8 @@ export const RSVPModal: React.FC<RSVPModalProps> = ({
   const progressPercent = Math.round(((wordIndex + 1) / words.length) * 100);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-150 select-none">
-      <div className="w-full max-w-xl rounded-3xl bg-slate-950 border border-slate-800 shadow-2xl p-6 text-slate-100 flex flex-col space-y-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-150 select-none" onClick={onClose}>
+      <div className="w-full max-w-xl rounded-3xl bg-slate-950 border border-slate-800 shadow-2xl p-6 text-slate-100 flex flex-col space-y-6" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div className="flex items-center gap-2">

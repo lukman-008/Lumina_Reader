@@ -5,7 +5,7 @@ import { Book, ReaderSettings, Highlight } from '../types';
 import { db } from '../services/db';
 import { habitTracker } from '../services/habitTracker';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Minimize2, Settings, List, X, Square, Columns2, ScrollText, Moon, Sun, Palette, Eye, CloudRain, Flame, Volume2, Zap, Sliders, BookOpen } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Maximize2, Minimize2, Settings, List, X, Square, Columns2, ScrollText, Moon, Sun, Palette, Eye, CloudRain, Flame, Volume2, Zap, Sliders, BookOpen, Highlighter, Sparkles } from 'lucide-react';
 import { SelectionPopup } from './SelectionPopup';
 import { HighlightPopover } from './HighlightPopover';
 import { AIAssistantDrawer } from './AIAssistantDrawer';
@@ -204,6 +204,39 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const [pendingHighlightScrollId, setPendingHighlightScrollId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (pendingHighlightScrollId && pdfViewMode === 'reader') {
+      const el = document.getElementById(`hl-${pendingHighlightScrollId}`);
+      if (el) {
+        if (settings.layoutMode === 'scroll') {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        const origStyle = el.style.boxShadow;
+        el.style.boxShadow = '0 0 0 4px rgba(245, 158, 11, 0.5)';
+        setTimeout(() => {
+          if (el) el.style.boxShadow = origStyle;
+        }, 1500);
+        setPendingHighlightScrollId(null);
+      } else {
+        const timer = setTimeout(() => {
+          const retryEl = document.getElementById(`hl-${pendingHighlightScrollId}`);
+          if (retryEl) {
+            if (settings.layoutMode === 'scroll') {
+               retryEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            const origStyle = retryEl.style.boxShadow;
+            retryEl.style.boxShadow = '0 0 0 4px rgba(245, 158, 11, 0.5)';
+            setTimeout(() => {
+              if (retryEl) retryEl.style.boxShadow = origStyle;
+            }, 1500);
+            setPendingHighlightScrollId(null);
+          }
+        }, 300);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [pendingHighlightScrollId, pageNumber, pdfViewMode, settings.layoutMode]);
+
+  useEffect(() => {
     habitTracker.startSession(book.id, book.title);
     return () => {
       habitTracker.endSession();
@@ -262,7 +295,16 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   }, [pageNumber, numPages]);
 
   const changePage = (offset: number) => {
-    setPageNumber(prev => Math.min(Math.max(1, prev + offset), numPages || 1));
+    setPageNumber(prev => {
+      const newPage = Math.min(Math.max(1, prev + offset), numPages || 1);
+      if (settings.layoutMode === 'scroll') {
+        const el = pageRefs.current[newPage];
+        if (el && containerRef.current) {
+          el.scrollIntoView({ behavior: 'smooth' });
+        }
+      }
+      return newPage;
+    });
   };
 
   const getPdfFilterStyle = () => {
@@ -292,7 +334,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
 
   const accentConfig = useMemo(() => {
     switch (settings.accentColor) {
-      case 'blue': return { bg: 'bg-blue-500', text: 'text-blue-500', border: 'border-blue-500' };
+      case 'sky': return { bg: 'bg-sky-500', text: 'text-sky-500', border: 'border-sky-500' };
       case 'emerald': return { bg: 'bg-emerald-500', text: 'text-emerald-500', border: 'border-emerald-500' };
       case 'rose': return { bg: 'bg-rose-500', text: 'text-rose-500', border: 'border-rose-500' };
       case 'amber': return { bg: 'bg-amber-500', text: 'text-amber-500', border: 'border-amber-500' };
@@ -314,11 +356,40 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     onUpdateSettings({ layoutMode: modes[(idx + 1) % modes.length] as any });
   };
 
-  const startTTS = (customText?: string) => {
-    const textToSpeak = customText || selectedText || "Please highlight text to use Text-to-Speech in PDF mode.";
-    ttsService.speakText(textToSpeak, { rate: 1.0 });
-    setIsTTSOpen(true);
-    setSelectionPosition(null);
+  const startTTS = async (customText?: string) => {
+    if (customText) {
+      ttsService.speakText(customText, { rate: 1.0 });
+      setIsTTSOpen(true);
+      setSelectionPosition(null);
+      return;
+    }
+    if (selectedText) {
+      ttsService.speakText(selectedText, { rate: 1.0 });
+      setIsTTSOpen(true);
+      setSelectionPosition(null);
+      return;
+    }
+
+    // Full audio book mode for PDF
+    if (pdfDoc) {
+      setIsExtracting(true);
+      let fullText = '';
+      const endPage = Math.min(pageNumber + 20, numPages); // Extract next 20 pages max at once to prevent freezing
+      for (let i = pageNumber; i <= endPage; i++) {
+        try {
+          const page = await pdfDoc.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map((s: any) => s.str).join(' ');
+          fullText += pageText + ' \n\n';
+        } catch (e) {
+          console.error("Error extracting page", i, e);
+        }
+      }
+      setIsExtracting(false);
+      ttsService.speakText(fullText || "No readable text found.", { rate: 1.0 });
+      setIsTTSOpen(true);
+      setSelectionPosition(null);
+    }
   };
 
   const handleUpdateHighlight = async (id: string, updates: any) => {
@@ -423,6 +494,21 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     return () => document.removeEventListener('mouseup', handleMouseUp);
   }, []);
 
+  // Close popup if clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.fixed.z-50') && !target.closest('.pointer-events-auto.mix-blend-multiply')) {
+        setActiveHighlightPopover(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
 
 return (
     <div className={`w-full flex flex-col transition-colors duration-200 relative overflow-hidden ${themeStyle.bg} ${themeStyle.text} ${isZenMode ? 'h-screen' : 'h-[calc(100vh-2.75rem)]'}`}>
@@ -509,13 +595,26 @@ return (
               <span className="hidden md:inline truncate max-w-[140px]">{book.title}</span>
             </button>
 
+            {/* Highlights & Notes */}
             <button
               onClick={() => setIsAnnotationsDrawerOpen(true)}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer flex items-center gap-1.5 text-xs ${themeStyle.text}`}
-              title="Notes & Highlights"
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition relative cursor-pointer ${themeStyle.text}`}
+              title="Notebook & Highlights"
             >
-              <ScrollText className="w-4 h-4" />
-              <span className="hidden md:inline">Notes</span>
+              <Highlighter className="w-4 h-4" />
+              {highlights.length > 0 && (
+                <span className={`absolute top-1 right-1 w-2 h-2 rounded-full ${accentConfig.bg}`} />
+              )}
+            </button>
+
+            {/* AI Assistant */}
+            <button
+              onClick={() => setIsAIOpen(true)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-medium transition cursor-pointer"
+              title="Open AI Reading Companion"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Ask AI</span>
             </button>
           </div>
 
@@ -530,10 +629,17 @@ return (
 
             <button
               onClick={() => setIsSoundscapeOpen(true)}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${themeStyle.text}`}
+              className={`p-1.5 rounded-lg transition cursor-pointer relative ${
+                settings.soundscape && settings.soundscape !== 'none'
+                  ? 'bg-amber-500/20 text-amber-500 hover:bg-amber-500/30 ring-1 ring-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)]'
+                  : `hover:bg-black/5 dark:hover:bg-white/10 ${themeStyle.text}`
+              }`}
               title="Soundscapes & Warmth (S)"
             >
               <CloudRain className="w-4 h-4" />
+              {settings.soundscape && settings.soundscape !== 'none' && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              )}
             </button>
 
             <button
@@ -546,10 +652,15 @@ return (
 
             <button
               onClick={() => startTTS()}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${isTTSOpen ? 'text-amber-500 bg-amber-500/10' : themeStyle.text}`}
+              className={`p-1.5 rounded-lg transition cursor-pointer relative ${
+                isTTSOpen ? 'bg-amber-500/20 text-amber-500 ring-1 ring-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.2)] hover:bg-amber-500/30' : `hover:bg-black/5 dark:hover:bg-white/10 ${themeStyle.text}`
+              }`}
               title="Read Aloud with Offline Text-to-Speech"
             >
               <Volume2 className="w-4 h-4" />
+              {isTTSOpen && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              )}
             </button>
 
             <button
@@ -562,7 +673,6 @@ return (
             
             <div className="w-px h-6 bg-slate-500/30 mx-1"></div>
 
-            
             <button
               onClick={() => setPdfViewMode(m => m === 'native' ? 'reader' : 'native')}
               className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer flex items-center gap-1 border ${themeStyle.border} ${themeStyle.text}`}
@@ -574,17 +684,13 @@ return (
             
             <div className="w-px h-6 bg-slate-500/30 mx-1"></div>
 
-            
             <button
-              onClick={() => setPdfViewMode(m => m === 'native' ? 'reader' : 'native')}
-              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer flex items-center gap-1 border ${themeStyle.border} ${themeStyle.text}`}
-              title={`Switch to ${pdfViewMode === 'native' ? 'Reader' : 'Native'} Mode`}
+              onClick={onToggleZenMode}
+              className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${themeStyle.text}`}
+              title="Distraction-Free Zen Mode (Z)"
             >
-              {pdfViewMode === 'native' ? <BookOpen className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              <span className="hidden sm:inline text-xs font-medium">{pdfViewMode === 'native' ? 'Reader' : 'Native'}</span>
+              <Maximize2 className="w-4 h-4" />
             </button>
-            
-            <div className="w-px h-6 bg-slate-500/30 mx-1"></div>
 
             <button
               onClick={() => {
@@ -856,7 +962,7 @@ return (
         onClose={() => setIsAIOpen(false)}
         selectedText={selectedText}
         book={book}
-        currentChapter={{ id: 'pdf', title: `Page ${pageNumber}`, content: selectedText || '' }}
+        currentChapter={{ id: 'pdf', title: `Page ${pageNumber}`, content: selectedText || '', wordCount: 0 }}
       />
 
       {/* Annotations Drawer */}
@@ -869,7 +975,13 @@ return (
         onDeleteBookmark={() => {}}
         onJumpToBookmark={() => {}}
         onJumpToHighlight={(h) => {
+          setPageNumber(h.chapterIndex + 1);
+          if (settings.layoutMode === 'scroll') {
+            const el = pageRefs.current[h.chapterIndex + 1];
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
           setPendingHighlightScrollId(h.id);
+          setIsAnnotationsDrawerOpen(false);
         }}
         bookTitle={book.title}
       />
@@ -964,7 +1076,7 @@ return (
         isOpen={isRSVPOpen}
         onClose={() => setIsRSVPOpen(false)}
         text={selectedText || "Please highlight text to use RSVP Speed Reader in PDF mode."}
-        title={book.title}
+        chapterTitle={book.title}
       />
       </ErrorBoundary>
     </div>

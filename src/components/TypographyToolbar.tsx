@@ -61,7 +61,9 @@ export const TypographyToolbar: React.FC<TypographyToolbarProps> = ({
   const activeAccent = settings.accentColor || 'amber';
 
   return (
-    <div className="absolute right-4 top-14 w-84 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4 text-slate-200 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-4 select-none max-h-[85vh] overflow-y-auto">
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div className="absolute right-4 top-14 w-84 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4 text-slate-200 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-4 select-none max-h-[85vh] overflow-y-auto">
       {/* Smart Themes */}
       <div>
         <div className="flex items-center justify-between text-xs font-semibold text-slate-400 mb-2">
@@ -161,6 +163,21 @@ export const TypographyToolbar: React.FC<TypographyToolbarProps> = ({
             step="0.1"
             value={settings.lineHeight}
             onChange={(e) => onUpdateSettings({ lineHeight: Number(e.target.value) })}
+            className="w-full accent-amber-500 cursor-pointer"
+          />
+        </div>
+        <div>
+          <div className="flex justify-between text-xs text-slate-400 mb-1">
+            <span>Letter Spacing</span>
+            <span className="font-mono text-slate-200">{settings.letterSpacing || 0}px</span>
+          </div>
+          <input
+            type="range"
+            min="-1"
+            max="5"
+            step="0.5"
+            value={settings.letterSpacing || 0}
+            onChange={(e) => onUpdateSettings({ letterSpacing: Number(e.target.value) })}
             className="w-full accent-amber-500 cursor-pointer"
           />
         </div>
@@ -282,5 +299,6 @@ export const TypographyToolbar: React.FC<TypographyToolbarProps> = ({
         </label>
       </div>
     </div>
+    </>
   );
 };

@@ -165,11 +165,8 @@ const handleNavigateToResult = useCallback(
         const updatedProgress = {
           currentChapterIndex: clampedIndex,
           currentPageIndex: cPageIdx,
-          scrollOffset: 0,
           percentage,
           lastReadTimestamp: Date.now(),
-          totalReadTimeSeconds: targetBook.readingProgress?.totalReadTimeSeconds || 0,
-          readingVelocityWPM: targetBook.readingProgress?.readingVelocityWPM || 250,
         };
 
         const updatedBook: Book = {

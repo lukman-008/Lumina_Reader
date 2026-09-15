@@ -40,10 +40,13 @@ export const TOCDrawer: React.FC<TOCDrawerProps> = ({
     .filter(({ ch }) => ch.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
-    <aside
-      className="fixed left-0 top-0 bottom-0 w-80 sm:w-96 bg-slate-900 border-r border-slate-800 z-40 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200 select-none"
-      aria-label="Table of Contents"
-    >
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-30" onClick={onClose} />
+      <aside
+        className="fixed left-0 top-0 bottom-0 w-80 sm:w-96 bg-slate-900 border-r border-slate-800 z-40 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200 select-none"
+        aria-label="Table of Contents"
+      >
       <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
         <div className="flex items-center gap-2">
           <List className="w-4 h-4 text-amber-400" />
@@ -103,6 +106,7 @@ export const TOCDrawer: React.FC<TOCDrawerProps> = ({
         })}
       </div>
     </aside>
+    </>
   );
 };
 
@@ -206,10 +210,13 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
   });
 
   return (
-    <aside
-      className="fixed left-0 top-0 bottom-0 w-80 sm:w-96 bg-slate-900 border-r border-slate-800 z-40 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200 select-none text-slate-200"
-      aria-label="Annotations & Highlights"
-    >
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-30" onClick={onClose} />
+      <aside
+        className="fixed left-0 top-0 bottom-0 w-80 sm:w-96 bg-slate-900 border-r border-slate-800 z-40 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200 select-none text-slate-200"
+        aria-label="Annotations & Highlights"
+      >
       {/* Header */}
       <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
         <div className="flex items-center gap-2">
@@ -502,5 +509,6 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
         </div>
       )}
     </aside>
+    </>
   );
 };

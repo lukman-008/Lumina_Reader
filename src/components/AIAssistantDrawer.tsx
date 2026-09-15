@@ -49,10 +49,18 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
   // Vocabulary tab state
   const [wordToExplain, setWordToExplain] = useState(selectedText || '');
   useEffect(() => {
-    if (selectedText) {
-      setWordToExplain(selectedText);
+    if (isOpen && selectedText) {
+      const words = selectedText.trim().split(/\s+/).length;
+      if (words <= 3) {
+        setActiveTab('vocabulary');
+        setWordToExplain(selectedText);
+        setCharacterName(selectedText);
+      } else {
+        setActiveTab('ask');
+        setQuestion(`Explain this passage: "${selectedText}"`);
+      }
     }
-  }, [selectedText]);
+  }, [isOpen, selectedText]);
   const [vocabResult, setVocabResult] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -143,10 +151,12 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
   };
 
   return (
-    <aside
-      className="fixed right-0 top-0 bottom-0 w-full sm:w-96 md:w-[420px] bg-slate-900 border-l border-slate-800 z-40 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
-      aria-label="AI Reading Assistant"
-    >
+    <>
+      <div className="fixed inset-0 z-30" onClick={onClose} />
+      <aside
+        className="fixed right-0 top-0 bottom-0 w-full sm:w-96 md:w-[420px] bg-slate-900 border-l border-slate-800 z-40 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200"
+        aria-label="AI Reading Assistant"
+      >
       {/* Header */}
       <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
         <div className="flex items-center gap-2.5">
@@ -391,5 +401,6 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
         </form>
       )}
     </aside>
+    </>
   );
 };
