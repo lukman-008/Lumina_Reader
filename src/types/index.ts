@@ -27,6 +27,7 @@ export interface Highlight {
   startItemIndex?: number;
   endItemIndex?: number;
   pdfPageIndex?: number;
+  rects?: { left: number; top: number; width: number; height: number }[];
   color: 'yellow' | 'emerald' | 'sky' | 'rose' | 'amber' | 'violet';
   note?: string;
   scope?: 'word' | 'line' | 'paragraph';

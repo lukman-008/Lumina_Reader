@@ -1,0 +1,1 @@
+{"name":"Lumina Reader","short_name":"Lumina","description":"Cross-platform offline desktop book reader for Windows, macOS, and Linux","start_url":"/","display":"standalone","background_color":"#0f172a","theme_color":"#0f172a","lang":"en","scope":"/","id":"/","icons":[{"src":"/icon.svg","sizes":"512x512","type":"image/svg+xml","purpose":"any"}]}

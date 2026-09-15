@@ -131,7 +131,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
   onUpdateBookmark,
   bookTitle,
 }) => {
-  const [tab, setTab] = useState<'highlights' | 'bookmarks'>('highlights');
+  const [tab, setTab] = useState<'highlights' | 'notes' | 'bookmarks'>('highlights');
   const [selectedColorFilter, setSelectedColorFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -238,6 +238,17 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
           <span>Highlights ({highlights.length})</span>
         </button>
         <button
+          onClick={() => setTab('notes')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+            tab === 'notes'
+              ? 'bg-slate-800 text-amber-300 font-semibold shadow-xs'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Edit2 className="w-3.5 h-3.5" />
+          <span>Notes ({highlights.filter(h => h.note).length})</span>
+        </button>
+        <button
           onClick={() => setTab('bookmarks')}
           className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
             tab === 'bookmarks'
@@ -256,14 +267,14 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
           <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder={tab === 'highlights' ? 'Search quotes & notes...' : 'Search bookmarks...'}
+            placeholder={tab === 'highlights' ? 'Search quotes...' : tab === 'notes' ? 'Search notes...' : 'Search bookmarks...'}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
           />
         </div>
 
-        {tab === 'highlights' && (
+        {(tab === 'highlights' || tab === 'notes') && (
           <div className="flex items-center gap-1 overflow-x-auto pb-1 scrollbar-none text-[11px]">
             <button
               onClick={() => setSelectedColorFilter('all')}
@@ -323,16 +334,16 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
 
       {/* Main List */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
-        {tab === 'highlights' && (
+        {(tab === 'highlights' || tab === 'notes') && (
           <>
-            {filteredHighlights.length === 0 ? (
+            {filteredHighlights.filter(h => tab === 'notes' ? !!h.note : true).length === 0 ? (
               <div className="text-center py-12 text-xs text-slate-400">
                 {highlights.length === 0
                   ? 'Select any text while reading to highlight passages, attach thoughts, and export notes.'
-                  : 'No highlights match the current filter.'}
+                  : `No ${tab} match the current filter.`}
               </div>
             ) : (
-              filteredHighlights.map((h) => (
+              filteredHighlights.filter(h => tab === 'notes' ? !!h.note : true).map((h) => (
                 <div
                   key={h.id}
                   onClick={() => {

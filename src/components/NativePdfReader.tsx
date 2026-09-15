@@ -23,8 +23,10 @@ import 'react-pdf/dist/Page/TextLayer.css';
 
 
 
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+
 // Set up standard worker config
-pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface NativePdfReaderProps {
   book: Book;
@@ -36,6 +38,15 @@ interface NativePdfReaderProps {
   targetHighlightId?: string | null;
   onClearTargetHighlight?: () => void;
 }
+
+const highlightColors: Record<string, string> = {
+  yellow: 'bg-amber-400/35 border-b-2 border-amber-400/90',
+  emerald: 'bg-emerald-400/35 border-b-2 border-emerald-400/90',
+  sky: 'bg-sky-400/35 border-b-2 border-sky-400/90',
+  rose: 'bg-rose-400/35 border-b-2 border-rose-400/90',
+  amber: 'bg-orange-400/35 border-b-2 border-orange-400/90',
+  violet: 'bg-violet-400/35 border-b-2 border-violet-400/90',
+};
 
 export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   book,
@@ -176,6 +187,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   // Selection popup states
   const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
   const [selectedText, setSelectedText] = useState('');
+  const [selectionRects, setSelectionRects] = useState<{ left: number; top: number; width: number; height: number }[]>([]);
   const [selectionOffsets, setSelectionOffsets] = useState<any>(null);
 
   // Highlight popover state
@@ -326,6 +338,33 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     setActiveHighlightPopover(null);
   };
 
+  const renderHighlights = (pNum: number) => {
+    const pageHighlights = highlights.filter(h => h.chapterIndex === pNum - 1);
+    if (pageHighlights.length === 0) return null;
+    return pageHighlights.map((hl) => {
+      if (!hl.rects) return null;
+      return (
+        <div 
+          key={hl.id} 
+          className="absolute inset-0 pointer-events-none z-10"
+        >
+          {hl.rects.map((rect, i) => (
+            <div
+              key={i}
+              className={`absolute pointer-events-auto cursor-pointer mix-blend-multiply dark:mix-blend-screen transition-opacity hover:opacity-80 ${highlightColors[hl.color] || highlightColors.yellow}`}
+              style={{ left: `${rect.left}%`, top: `${rect.top}%`, width: `${rect.width}%`, height: `${rect.height}%` }}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                setActiveHighlightPopover({ highlight: hl, position: { x: e.clientX, y: e.clientY } });
+              }}
+            />
+          ))}
+        </div>
+      );
+    });
+  };
+
   const handleCreateHighlight = async (color: string, note?: string) => {
     if (!selectedText) return;
     
@@ -334,6 +373,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
       bookId: book.id,
       chapterIndex: pageNumber - 1,
       selectedText,
+      rects: selectionRects.length > 0 ? selectionRects : undefined,
       color: color as any,
       note,
       createdAt: Date.now(),
@@ -353,7 +393,22 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
         if (text) {
           const range = selection.getRangeAt(0);
           const rect = range.getBoundingClientRect();
+          
+          let normalizedRects: { left: number; top: number; width: number; height: number }[] = [];
+          const pageContainer = (selection.anchorNode as Node)?.parentElement?.closest('.react-pdf__Page');
+          if (pageContainer) {
+             const pageRect = pageContainer.getBoundingClientRect();
+             const rects = Array.from(range.getClientRects());
+             normalizedRects = rects.map(r => ({
+               left: ((r.left - pageRect.left) / pageRect.width) * 100,
+               top: ((r.top - pageRect.top) / pageRect.height) * 100,
+               width: (r.width / pageRect.width) * 100,
+               height: (r.height / pageRect.height) * 100,
+             }));
+          }
+
           setSelectedText(text);
+          setSelectionRects(normalizedRects);
           setSelectionPosition({
             x: rect.left + rect.width / 2,
             y: rect.top - 10,
@@ -361,6 +416,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
         }
       } else {
         setSelectionPosition(null);
+        setSelectionRects([]);
       }
     };
     document.addEventListener('mouseup', handleMouseUp);
@@ -609,51 +665,51 @@ return (
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
             <p>Loading High-Fidelity PDF Engine...</p>
           </div>
-        ) : pdfViewMode === 'reader' ? (
-          <div className="w-full max-w-3xl px-8 py-12 md:py-16 mx-auto relative transition-all duration-300">
-            {isExtracting ? (
-               <div className="flex justify-center items-center h-64 opacity-50">
-                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
-                 <p className="ml-3">Extracting text layout...</p>
-               </div>
-            ) : extractedText ? (
-              <div 
-                className={`prose prose-lg dark:prose-invert max-w-none ${
-                  settings.fontFamily === 'literata' ? 'font-literata' :
-                  settings.fontFamily === 'merriweather' ? 'font-merriweather' :
-                  settings.fontFamily === 'dyslexic' ? 'font-dyslexic' :
-                  'font-sans-ui'
-                }`}
-                style={{ 
-                  fontSize: `${settings.fontSize}px`, 
-                  lineHeight: settings.lineHeight,
-                  textAlign: settings.textAlign as any
-                }}
-              >
-                {extractedText.split('\n\n').map((paragraph, idx) => (
-                  <p key={idx} className="mb-6 whitespace-pre-wrap">
-                    {formatBionicText(paragraph)}
-                  </p>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-64 opacity-50 text-center">
-                 <Eye className="w-12 h-12 mb-4 opacity-30" />
-                 <p>No text could be extracted from this page.</p>
-                 <p className="text-sm mt-2">This may be a scanned image without OCR text layer.</p>
-                 <button onClick={() => setPdfViewMode('native')} className="mt-4 px-4 py-2 bg-black/10 rounded-md text-sm hover:bg-black/20 transition">Return to Native View</button>
-              </div>
-            )}
-          </div>
         ) : (
-          <div 
-
-            className={`shadow-2xl transition-all duration-300 ${themeStyle.container} ${settings.layoutMode !== 'scroll' ? 'rounded-lg overflow-hidden' : ''}`}
-            style={{ 
-              maxWidth: pdfMaxWidth * scale,
-              width: '100%' 
-            }}
-          >
+          <>
+            <div className={`w-full max-w-3xl px-8 py-12 md:py-16 mx-auto relative transition-all duration-300 ${pdfViewMode === 'reader' ? 'block' : 'hidden'}`}>
+              {isExtracting ? (
+                 <div className="flex justify-center items-center h-64 opacity-50">
+                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
+                   <p className="ml-3">Extracting text layout...</p>
+                 </div>
+              ) : extractedText ? (
+                <div 
+                  className={`prose prose-lg dark:prose-invert max-w-none ${
+                    settings.fontFamily === 'literata' ? 'font-literata' :
+                    settings.fontFamily === 'merriweather' ? 'font-merriweather' :
+                    settings.fontFamily === 'dyslexic' ? 'font-dyslexic' :
+                    'font-sans-ui'
+                  }`}
+                  style={{ 
+                    fontSize: `${settings.fontSize}px`, 
+                    lineHeight: settings.lineHeight,
+                    textAlign: settings.textAlign as any
+                  }}
+                >
+                  {extractedText.split('\n\n').map((paragraph, idx) => (
+                    <p key={idx} className="mb-6 whitespace-pre-wrap">
+                      {formatBionicText(paragraph)}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-64 opacity-50 text-center">
+                   <Eye className="w-12 h-12 mb-4 opacity-30" />
+                   <p>No text could be extracted from this page.</p>
+                   <p className="text-sm mt-2">This may be a scanned image without OCR text layer.</p>
+                   <button onClick={() => setPdfViewMode('native')} className="mt-4 px-4 py-2 bg-black/10 rounded-md text-sm hover:bg-black/20 transition cursor-pointer">Return to Native View</button>
+                </div>
+              )}
+            </div>
+            
+            <div 
+              className={`shadow-2xl transition-all duration-300 ${themeStyle.container} ${settings.layoutMode !== 'scroll' ? 'rounded-lg overflow-hidden' : ''} ${pdfViewMode === 'native' ? 'block' : 'hidden'}`}
+              style={{ 
+                maxWidth: pdfMaxWidth * scale,
+                width: '100%' 
+              }}
+            >
             <div style={{ filter: getPdfFilterStyle(), transition: 'filter 0.3s ease' }}>
               <Document suspense={false} options={pdfOptions}
                 file={pdfUrl}
@@ -679,12 +735,17 @@ return (
                           style={{ minHeight: (pdfMaxWidth * scale) * 1.414, width: pdfMaxWidth * scale }}
                         >
                           {isVisible ? (
-                            <Page suspense={false}
-                              pageNumber={pNum}
-                              width={pdfMaxWidth * scale}
-                              renderTextLayer={true}
-                              renderAnnotationLayer={true}
-                            />
+                            <>
+                              <Page suspense={false}
+                                pageNumber={pNum}
+                                width={pdfMaxWidth * scale}
+                                renderTextLayer={true}
+                                renderAnnotationLayer={true}
+                                loading={<div className="h-96 flex items-center justify-center text-slate-400">Loading page...</div>}
+                                error={<div className="h-96 flex items-center justify-center text-red-500">Error rendering page {pNum}</div>}
+                              />
+                              {renderHighlights(pNum)}
+                            </>
                           ) : (
                             <div className="absolute inset-0 flex items-center justify-center text-slate-400 bg-slate-50/50">
                               <span className="text-xl font-medium">Page {pNum}</span>
@@ -703,7 +764,10 @@ return (
                         width={(pdfMaxWidth * scale) / 2}
                         renderTextLayer={true}
                         renderAnnotationLayer={true}
+                        loading={<div className="h-96 flex items-center justify-center text-slate-400">Loading page...</div>}
+                        error={<div className="h-96 flex items-center justify-center text-red-500">Error rendering page</div>}
                       />
+                      {renderHighlights(pageNumber)}
                     </div>
                     {pageNumber + 1 <= numPages && (
                       <div className="shadow-xl overflow-hidden flex-shrink-0 bg-white" style={{ width: (pdfMaxWidth * scale) / 2 }}>
@@ -712,7 +776,10 @@ return (
                           width={(pdfMaxWidth * scale) / 2}
                           renderTextLayer={true}
                           renderAnnotationLayer={true}
+                          loading={<div className="h-96 flex items-center justify-center text-slate-400">Loading page...</div>}
+                          error={<div className="h-96 flex items-center justify-center text-red-500">Error rendering page</div>}
                         />
+                        {renderHighlights(pageNumber + 1)}
                       </div>
                     )}
                   </div>
@@ -724,12 +791,16 @@ return (
                       width={pdfMaxWidth * scale}
                       renderTextLayer={true}
                       renderAnnotationLayer={true}
+                      loading={<div className="h-96 flex items-center justify-center text-slate-400">Loading page...</div>}
+                      error={<div className="h-96 flex items-center justify-center text-red-500">Error rendering page</div>}
                     />
+                    {renderHighlights(pageNumber)}
                   </div>
                 )}
               </Document>
             </div>
           </div>
+          </>
         )}
       </div>
       
