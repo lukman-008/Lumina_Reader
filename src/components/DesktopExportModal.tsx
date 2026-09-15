@@ -105,6 +105,16 @@ npx electron-builder --linux`;
             2. Tauri Native (~15MB Executable)
           </button>
           <button
+            onClick={() => setSelectedTab('android')}
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition ${
+              selectedTab === 'android'
+                ? 'bg-amber-500 text-slate-950 font-semibold shadow-xs'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            3. Android APK
+          </button>
+          <button
             onClick={() => setSelectedTab('electron')}
             className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-medium transition ${
               selectedTab === 'electron'
@@ -112,7 +122,7 @@ npx electron-builder --linux`;
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            3. Electron Binary
+            4. Electron Binary
           </button>
         </div>
 
@@ -135,6 +145,31 @@ npx electron-builder --linux`;
             </div>
           )}
 
+          {selectedTab === 'android' && (
+            <div className="space-y-3">
+              <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="font-semibold text-slate-200 text-sm">Packaging Android APK via Capacitor</h4>
+                  <button
+                    onClick={() => copyCode('npm run android:sync')}
+                    className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition"
+                  >
+                    {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied ? 'Copied' : 'Copy Commands'}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-400 mb-2">
+                  We have added Capacitor to the project. To generate an APK or AAB, run this command to sync the web build with the Android project:
+                </p>
+                <pre className="p-3 rounded-lg bg-slate-950 font-mono text-xs text-amber-300 overflow-x-auto border border-slate-800">
+                  npm run android:sync
+                </pre>
+                <p className="text-xs text-slate-400 mt-3">
+                  After syncing, open the <code>android/</code> folder in <strong>Android Studio</strong>. From there, you can click <strong>Build &gt; Build Bundle(s) / APK(s) &gt; Build APK(s)</strong>.
+                </p>
+              </div>
+            </div>
+          )}
           {selectedTab === 'tauri' && (
             <div className="space-y-3">
               <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">

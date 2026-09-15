@@ -20,6 +20,7 @@
 - **Comprehensive Annotation Manager (`⌘+Shift+A`)**: Dedicated central workspace to search, filter by color or scope (word, sentence, paragraph), edit notes, and export study summaries to Markdown.
 - **Targeted Selection Notes**: Select any word, line, or paragraph while reading to highlight with custom palettes (Gold, Mint, Sky, Rose, Orange, Purple) and attach contextual reflection notes.
 - **Flexible Library Layout**: Switch effortlessly between visual 3D book cover cards and high-density tabular list view with sorting by Recently Read, Title, Author, Reading Progress, or Word Count.
+- **Granular Typographic Control**: Adjust font sizes, line height multipliers, and precise letter spacing (perfect for accessibility and dyslexia support).
 - **Curated Font Typography**:
   - **Literata**: Classic digital editorial serif designed for continuous book reading.
   - **Merriweather**: High-contrast, sturdy book face with generous x-height.
@@ -59,7 +60,7 @@
   - ☕ Coffee House Ambience
   - 🌊 Ocean Waves
   - 📻 Gentle White Noise
-- **Offline Text-to-Speech (TTS)**: Native browser speech engine (`window.speechSynthesis`) with real-time sentence-by-sentence tracking, play/pause controls, and rate adjustments.
+- **Full Audiobook Text-to-Speech (TTS)**: Native offline browser speech engine (`window.speechSynthesis`) with continuous reading (automatically turning pages in PDFs and EPUBs), real-time sentence-by-sentence highlight tracking, play/pause controls, and rate adjustments. Active state indicators glow when running.
 
 ### ✏️ Annotations, Notebook & Study Suite
 - **Multi-Color In-Text Highlighting**: Select any passage to highlight in **Gold**, **Mint**, **Sky**, **Rose**, **Orange**, or **Purple**.
@@ -78,7 +79,7 @@
   - **Ask Custom Questions**: Converse directly with an AI tutor grounded in your book's text.
 
 ### 📊 Reading Habits & Focus Timer
-- **Automatic Habit Tracking**: Tracks daily reading streaks, total minutes read, pages turned, and words completed.
+- **Automatic Habit Tracking**: Tracks daily reading streaks (displayed live in the desktop title bar), total minutes read, pages turned, and words completed.
 - **Integrated Pomodoro Focus Timer**: Customizable 25-minute reading intervals with audible chimes to build consistent reading routines.
 - **Library Organization**: Organize books with custom Shelves, Reading Status tags (Want to Read, Currently Reading, Completed), and search filters.
 
@@ -154,6 +155,23 @@ This runs:
 npm start
 ```
 The server will boot and serve the production application on `http://localhost:3000`.
+
+---
+
+## 📱 Android App Packaging (Capacitor)
+
+Lumina Reader is fully configured to compile into a native Android application using Capacitor.
+
+1. **Install Android Studio**: Ensure you have [Android Studio](https://developer.android.com/studio) installed on your machine.
+2. **Sync Web Assets to Android**: Run the sync command which builds the React Vite app and copies the output (`/dist`) into the native Android project folder:
+   ```bash
+   npm run android:sync
+   ```
+3. **Open Android Studio**: 
+   Open the `/android` directory located inside your project folder using Android Studio. 
+   *(Alternatively, run `npx cap open android` in your terminal).*
+4. **Build APK**: 
+   In Android Studio, let Gradle sync. Then click **Build > Build Bundle(s) / APK(s) > Build APK(s)** in the top menu to generate your installable Android app!
 
 ---
 
