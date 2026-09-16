@@ -95,11 +95,17 @@ export const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
     const rect = progressBarRef.current.getBoundingClientRect();
     const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
     const percent = x / rect.width;
-    const targetChapter = Math.min(totalChapters - 1, Math.floor(percent * totalChapters));
+    
+    let displayChapter = 0;
+    if (book.format === 'pdf') {
+      displayChapter = Math.min(totalPagesInChapter - 1, Math.floor(percent * totalPagesInChapter));
+    } else {
+      displayChapter = Math.min(totalChapters - 1, Math.floor(percent * totalChapters));
+    }
 
     setHoverPosition({
       percent: Math.round(percent * 100),
-      chapterIndex: targetChapter,
+      chapterIndex: displayChapter,
       x: e.clientX,
     });
   };
@@ -112,9 +118,15 @@ export const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
     const percent = x / rect.width;
 
     // Calculate chapter and page within chapter
-    const targetChapterFloat = percent * totalChapters;
-    const targetChapterIndex = Math.min(totalChapters - 1, Math.floor(targetChapterFloat));
-    onNavigateChapter(targetChapterIndex);
+    if (book.format === 'pdf') {
+      const targetPageFloat = percent * totalPagesInChapter;
+      const targetPageIndex = Math.min(totalPagesInChapter - 1, Math.max(0, Math.floor(targetPageFloat)));
+      onNavigatePage(targetPageIndex);
+    } else {
+      const targetChapterFloat = percent * totalChapters;
+      const targetChapterIndex = Math.min(totalChapters - 1, Math.floor(targetChapterFloat));
+      onNavigateChapter(targetChapterIndex);
+    }
   };
 
   return (
@@ -131,7 +143,9 @@ export const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
           className="fixed bottom-14 z-50 px-3 py-1.5 rounded-xl bg-slate-900/95 border border-slate-700 shadow-2xl text-[11px] text-slate-200 pointer-events-none animate-in fade-in zoom-in-95 duration-100 flex flex-col items-center gap-0.5"
         >
           <span className="font-semibold text-amber-400">
-            {(book.chapters || [])[hoverPosition.chapterIndex]?.title || 'Chapter'}
+            {book.format === 'pdf' 
+              ? `Page ${hoverPosition.chapterIndex + 1}`
+              : (book.chapters || [])[hoverPosition.chapterIndex]?.title || 'Chapter'}
           </span>
           <span className="text-[10px] text-slate-400">
             Click to jump · {hoverPosition.percent}% of book
@@ -168,7 +182,21 @@ export const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
             setHoverPosition(null);
           }}
           onMouseMove={handleMouseMove}
+          onTouchMove={(e) => {
+            const touch = e.touches[0];
+            const syntheticEvent = {
+              clientX: touch.clientX,
+            } as React.MouseEvent<HTMLDivElement>;
+            handleMouseMove(syntheticEvent);
+          }}
           onClick={handleBarClick}
+          onTouchEnd={(e) => {
+            if (!hoverPosition) return;
+            const syntheticEvent = {
+              clientX: hoverPosition.x,
+            } as React.MouseEvent<HTMLDivElement>;
+            handleBarClick(syntheticEvent);
+          }}
           className="w-full h-3 flex items-center cursor-pointer group relative py-1"
           title="Click or drag to jump to position"
         >
@@ -219,7 +247,7 @@ export const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
               </span>
             ) : (
               <span>
-                Book: {bookProgressPercent}% · Ch {currentChapterIndex + 1}/{totalChapters}
+                Book: {bookProgressPercent}% {book.format !== 'pdf' && `· Ch ${currentChapterIndex + 1}/${totalChapters}`}
               </span>
             )}
           </button>

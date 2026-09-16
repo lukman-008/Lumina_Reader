@@ -183,6 +183,35 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   const [zenNavVisible, setZenNavVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentAreaRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  const handleSwipeStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleSwipeEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    
+    const deltaX = touchEndX - touchStartX.current;
+    const deltaY = touchEndY - touchStartY.current;
+
+    // Only register as swipe if horizontal distance is greater than vertical (allows vertical scroll to work)
+    // and distance is significant (at least 40px)
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 40) {
+      if (deltaX > 0) {
+        handlePrevPage(); // Swipe right -> previous page
+      } else {
+        handleNextPage(); // Swipe left -> next page
+      }
+    }
+    
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
 
   const currentChapter = (book.chapters || [])[currentChapterIndex] || (book.chapters || [])[0];
   const themeStyle = THEME_STYLES[settings.theme] || THEME_STYLES.paper;
@@ -245,10 +274,13 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   const totalPagesInChapter = pages.length;
 
   useEffect(() => {
-    if (settings.layoutMode !== 'scroll') return;
-    
     const handleScroll = () => {
-      if (!contentAreaRef.current) return;
+      // Close popups when scrolling
+      if (activeHighlightPopover) setActiveHighlightPopover(null);
+      if (selectionPosition) setSelectionPosition(null);
+
+      // Only update reading progress in scroll mode
+      if (!contentAreaRef.current || settings.layoutMode !== 'scroll') return;
       
       const { scrollTop, scrollHeight, clientHeight } = contentAreaRef.current;
       const scrollRatio = scrollTop / (scrollHeight - clientHeight || 1);
@@ -259,10 +291,10 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
 
     const container = contentAreaRef.current;
     if (container) {
-      container.addEventListener('scroll', handleScroll);
+      container.addEventListener('scroll', handleScroll, { passive: true });
       return () => container.removeEventListener('scroll', handleScroll);
     }
-  }, [settings.layoutMode, totalPagesInChapter]);
+  }, [settings.layoutMode, totalPagesInChapter, activeHighlightPopover, selectionPosition]);
 
   const safePageIndex = Math.min(currentPageIndex, Math.max(0, totalPagesInChapter - 1));
   const activePageParagraphs = pages[safePageIndex] || [];
@@ -874,6 +906,8 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     <div
       ref={containerRef}
       onMouseMove={handleMouseMove}
+      onTouchStart={handleSwipeStart}
+      onTouchEnd={handleSwipeEnd}
       
       className={`${
         isZenMode ? 'h-screen' : 'h-[calc(100vh-2.75rem)]'

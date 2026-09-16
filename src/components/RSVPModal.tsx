@@ -135,7 +135,10 @@ export const RSVPModal: React.FC<RSVPModalProps> = ({
         </div>
 
         {/* RSVP Display Box */}
-        <div className="h-44 rounded-2xl bg-slate-900 border border-slate-800 relative flex flex-col items-center justify-center px-4 overflow-hidden">
+        <div 
+          onClick={() => setIsPlaying((prev) => !prev)}
+          className="h-44 rounded-2xl bg-slate-900 border border-slate-800 relative flex flex-col items-center justify-center px-4 overflow-hidden cursor-pointer"
+        >
           {/* Top and Bottom Alignment Marker Guides */}
           <div className="absolute top-2 w-1.5 h-3 bg-amber-500/80 rounded-full" />
           <div className="absolute bottom-2 w-1.5 h-3 bg-amber-500/80 rounded-full" />
@@ -143,9 +146,9 @@ export const RSVPModal: React.FC<RSVPModalProps> = ({
 
           {/* Word Presentation with Focal Point */}
           <div className="text-3xl sm:text-4xl font-mono tracking-wide flex items-center z-10">
-            <span className="text-right w-44 text-slate-200">{prefix}</span>
+            <span className="text-right w-32 sm:w-44 text-slate-200">{prefix}</span>
             <span className="text-amber-400 font-bold px-0.5">{focalLetter}</span>
-            <span className="text-left w-44 text-slate-200">{suffix}</span>
+            <span className="text-left w-32 sm:w-44 text-slate-200">{suffix}</span>
           </div>
 
           {/* Micro context snippet */}

@@ -50,7 +50,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
   onOpenAnnotationManager,
   onNavigateHome,
 }) => {
-  const { platform, isStandalone } = usePlatform();
+  const { platform, isStandalone, isMobile } = usePlatform();
   const { isInstallable, install } = usePWAInstall();
   const [isPlayingAudio, setIsPlayingAudio] = React.useState(ambientAudio.isPlaying());
   const [streak, setStreak] = React.useState<number>(0);
@@ -68,21 +68,26 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
 
   return (
     <header 
-      className="h-11 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-3 flex items-center justify-between select-none z-30 shrink-0 sticky top-0"
-      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      className="min-h-[44px] bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-3 flex items-center justify-between select-none z-30 shrink-0 sticky top-0"
+      style={{ 
+        WebkitAppRegion: 'drag',
+        paddingTop: isMobile ? 'env(safe-area-inset-top, 0px)' : undefined 
+      } as React.CSSProperties}
     >
       {/* Left: Window identity & App branding */}
       <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {/* Native Mac style traffic dots aesthetic when on desktop */}
-        <div className="flex items-center gap-1.5 pr-1">
-          <span 
-            onClick={onNavigateHome}
-            className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-400 cursor-pointer transition-colors" 
-            title="Close / Back to Library" 
-          />
-          <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 hover:bg-amber-400 cursor-pointer" title="Minimize" />
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 hover:bg-emerald-400 cursor-pointer" title="Expand" />
-        </div>
+        {!isMobile && (
+          <div className="flex items-center gap-1.5 pr-1">
+            <span 
+              onClick={onNavigateHome}
+              className="w-2.5 h-2.5 rounded-full bg-rose-500/80 hover:bg-rose-400 cursor-pointer transition-colors" 
+              title="Close / Back to Library" 
+            />
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 hover:bg-amber-400 cursor-pointer" title="Minimize" />
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 hover:bg-emerald-400 cursor-pointer" title="Expand" />
+          </div>
+        )}
 
         <div 
           className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
@@ -98,17 +103,19 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         </div>
 
         {/* OS compatibility badge */}
-        <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
-          {platform === 'macos' && <Apple className="w-3 h-3 text-slate-300" />}
-          {platform === 'windows' && <Monitor className="w-3 h-3 text-sky-400" />}
-          {platform === 'linux' && <Terminal className="w-3 h-3 text-emerald-400" />}
-          <span className="capitalize">{platform} Native</span>
-          {isStandalone && <span className="text-amber-400 font-medium">· PWA</span>}
-        </div>
+        {!isMobile && (
+          <div className="hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+            {platform === 'macos' && <Apple className="w-3 h-3 text-slate-300" />}
+            {platform === 'windows' && <Monitor className="w-3 h-3 text-sky-400" />}
+            {platform === 'linux' && <Terminal className="w-3 h-3 text-emerald-400" />}
+            <span className="capitalize">{platform} Native</span>
+            {isStandalone && <span className="text-amber-400 font-medium">· PWA</span>}
+          </div>
+        )}
       </div>
 
       {/* Center: Current book title if reading */}
-      <div className="max-w-[35%] truncate text-center" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      <div className="max-w-[35%] truncate text-center hidden sm:block" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {currentBookTitle ? (
           <span className="text-xs font-medium text-slate-300 tracking-wide">
             {currentBookTitle}
@@ -119,10 +126,10 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
       </div>
 
       {/* Right: Quick desktop controls */}
-      <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      <div className="flex items-center gap-1 sm:gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {/* Offline / Online indicator */}
         <div
-          className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+          className={`hidden md:flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
             isOnline
               ? 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
               : 'bg-amber-950/40 border-amber-500/30 text-amber-400'
@@ -179,7 +186,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         )}
 
         {/* PWA Install Button if available */}
-        {isInstallable && (
+        {isInstallable && !isMobile && (
           <button
             onClick={install}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-600/90 hover:bg-blue-600 text-white text-xs font-medium shadow-xs transition cursor-pointer"
@@ -198,9 +205,11 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
             title="Search Index across entire library (⌘K)"
           >
             <Search className="w-3.5 h-3.5" />
-            <kbd className="hidden lg:inline text-[10px] bg-slate-900 px-1 py-0.5 rounded text-slate-400 font-mono">
-              ⌘K
-            </kbd>
+            {!isMobile && (
+              <kbd className="hidden lg:inline text-[10px] bg-slate-900 px-1 py-0.5 rounded text-slate-400 font-mono">
+                ⌘K
+              </kbd>
+            )}
           </button>
         )}
 
@@ -216,31 +225,37 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         )}
 
         {/* Packaging Guide modal */}
-        <button
-          onClick={onOpenExportGuide}
-          className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
-          title="Cross-platform desktop build instructions (Tauri/Electron)"
-        >
-          <Download className="w-3.5 h-3.5" />
-        </button>
+        {!isMobile && (
+          <button
+            onClick={onOpenExportGuide}
+            className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition hidden sm:block"
+            title="Cross-platform desktop build instructions"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+        )}
 
         {/* Shortcuts modal */}
-        <button
-          onClick={onOpenShortcuts}
-          className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
-          title="Keyboard shortcuts"
-        >
-          <Keyboard className="w-3.5 h-3.5" />
-        </button>
+        {!isMobile && (
+          <button
+            onClick={onOpenShortcuts}
+            className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition hidden sm:block"
+            title="Keyboard shortcuts"
+          >
+            <Keyboard className="w-3.5 h-3.5" />
+          </button>
+        )}
 
         {/* Zen mode toggle */}
-        <button
-          onClick={onToggleZenMode}
-          className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
-          title={isZenMode ? 'Exit Zen Mode (Esc)' : 'Zen Distraction-Free Reading (Z)'}
-        >
-          {isZenMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-        </button>
+        {!isMobile && (
+          <button
+            onClick={onToggleZenMode}
+            className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
+            title={isZenMode ? 'Exit Zen Mode (Esc)' : 'Zen Distraction-Free Reading (Z)'}
+          >
+            {isZenMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
+        )}
 
         {/* Windows native control spacer (prevents overlap with titleBarOverlay) */}
         {platform === 'windows' && <div className="w-[140px] shrink-0" />}

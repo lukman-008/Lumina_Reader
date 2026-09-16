@@ -83,13 +83,13 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
       onMouseUp={(e) => e.stopPropagation()}
       onMouseDown={(e) => { if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return; e.preventDefault(); }}
       style={{
-        left: `${Math.max(10, Math.min(position.x - 160, window.innerWidth - 360))}px`,
+        left: `${Math.max(10, Math.min(position.x - 160, window.innerWidth - (window.innerWidth < 640 ? 300 : 360)))}px`,
         top: `${Math.max(10, position.y - (isAddingNote ? 140 : 54))}px`,
       }}
       className="fixed z-50 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-slate-700/90 shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 select-none text-slate-200 text-xs"
     >
       {isAddingNote ? (
-        <div className="w-80 p-2.5 space-y-2">
+        <div className="w-[280px] sm:w-80 p-2.5 space-y-2">
           <div className="flex items-center justify-between text-[11px] font-medium text-slate-300">
             <div className="flex items-center gap-1.5">
               <span className="px-1.5 py-0.5 rounded text-[10px] font-mono uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">

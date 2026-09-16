@@ -9,7 +9,7 @@ interface DesktopExportModalProps {
 
 export const DesktopExportModal: React.FC<DesktopExportModalProps> = ({ isOpen, onClose }) => {
   const { platform } = usePlatform();
-  const [selectedTab, setSelectedTab] = useState<'pwa' | 'tauri' | 'electron'>('pwa');
+  const [selectedTab, setSelectedTab] = useState<'pwa' | 'tauri' | 'electron' | 'android'>('pwa');
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;

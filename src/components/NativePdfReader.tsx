@@ -23,10 +23,10 @@ import 'react-pdf/dist/Page/TextLayer.css';
 
 
 
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+// import removed
 
 // Set up standard worker config
-pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
 interface NativePdfReaderProps {
   book: Book;
@@ -65,33 +65,41 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
 
   const [zenNavVisible, setZenNavVisible] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState<number>(800);
+  const [containerWidth, setContainerWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 800);
   const [scale, setScale] = useState<number>(1.0);
+  
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  const handleSwipeStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleSwipeEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const touchEndY = e.changedTouches[0].clientY;
+    
+    const deltaX = touchEndX - touchStartX.current;
+    const deltaY = touchEndY - touchStartY.current;
+
+    // Only register as swipe if horizontal distance is greater than vertical (allows scrolling)
+    // and distance is significant
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 40) {
+      if (deltaX > 0) {
+        changePage(-1); // Swipe right -> previous page
+      } else {
+        changePage(1); // Swipe left -> next page
+      }
+    }
+    
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
   const [pdfFilterTheme, setPdfFilterTheme] = useState<'light' | 'dark' | 'sepia'>('light');
 
   const pageRefs = useRef<{[key: number]: HTMLDivElement | null}>({});
-  
-  useEffect(() => {
-    if (settings.layoutMode !== 'scroll' || numPages === 0) return;
-    
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting && entry.intersectionRatio > 0.3) {
-          const page = Number(entry.target.getAttribute('data-page-number'));
-          if (page && !isNaN(page)) {
-            setPageNumber(page);
-          }
-        }
-      });
-    }, { threshold: 0.3, root: containerRef.current });
-
-    Object.values(pageRefs.current).forEach(node => {
-      if (node) observer.observe(node as Element);
-    });
-
-    return () => observer.disconnect();
-  }, [settings.layoutMode, numPages, scale]);
-
 
   const [pdfViewMode, setPdfViewMode] = useState<'native' | 'reader'>('native');
   const [extractedText, setExtractedText] = useState<string>('');
@@ -343,7 +351,8 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     }
   }, [settings.accentColor]);
 
-  const pdfMaxWidth = 800;
+  // On mobile (narrow container), bound the max width to the container size (minus padding).
+  const pdfMaxWidth = Math.min(800, Math.max(300, containerWidth - 32));
 
   const navigateToOutlineItem = async (item: any) => {
     setIsTOCOpen(false);
@@ -490,8 +499,17 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
         setSelectionRects([]);
       }
     };
+    
+    const handleTouchEnd = () => {
+      setTimeout(handleMouseUp, 100);
+    };
+
     document.addEventListener('mouseup', handleMouseUp);
-    return () => document.removeEventListener('mouseup', handleMouseUp);
+    document.addEventListener('touchend', handleTouchEnd);
+    return () => {
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
   }, []);
 
   // Close popup if clicking outside
@@ -511,7 +529,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   }, []);
 
 return (
-    <div className={`w-full flex flex-col transition-colors duration-200 relative overflow-hidden ${themeStyle.bg} ${themeStyle.text} ${isZenMode ? 'h-screen' : 'h-[calc(100vh-2.75rem)]'}`}>
+    <div className={`w-full flex flex-col transition-colors duration-200 relative  ${themeStyle.bg} ${themeStyle.text} ${isZenMode ? 'h-screen' : 'h-[calc(100vh-2.75rem)]'}`}>
       <ErrorBoundary>
       
 
@@ -763,7 +781,32 @@ return (
 
       <div 
         ref={containerRef}
-        className="flex-1 overflow-y-auto overflow-x-hidden w-full flex justify-center pt-8 pb-24 items-start"
+        onTouchStart={handleSwipeStart}
+        onTouchEnd={handleSwipeEnd}
+        className="flex-1 overflow-y-auto overflow-x-auto w-full flex justify-center pt-8 pb-24 items-start"
+        onScroll={(e) => {
+          if (activeHighlightPopover) setActiveHighlightPopover(null);
+          if (selectionPosition) setSelectionPosition(null);
+          if (settings.layoutMode === 'scroll') {
+            const container = e.currentTarget as HTMLDivElement;
+            const pageElements = container.querySelectorAll('[data-page-number]');
+            let bestPage = pageNumber;
+            let minDistance = Infinity;
+            const containerCenter = container.getBoundingClientRect().top + container.clientHeight / 2;
+            pageElements.forEach(el => {
+              const rect = el.getBoundingClientRect();
+              const center = rect.top + rect.height / 2;
+              const dist = Math.abs(center - containerCenter);
+              if (dist < minDistance) {
+                minDistance = dist;
+                bestPage = Number(el.getAttribute('data-page-number'));
+              }
+            });
+            if (bestPage && bestPage !== pageNumber) {
+              setPageNumber(bestPage);
+            }
+          }
+        }}
       >
 
         {!pdfUrl ? (
@@ -781,7 +824,7 @@ return (
                  </div>
               ) : extractedText ? (
                 <div 
-                  className={`prose prose-lg dark:prose-invert max-w-none ${
+                  className={`prose prose-lg dark:prose-invert max-w-none pb-20 ${
                     settings.fontFamily === 'literata' ? 'font-literata' :
                     settings.fontFamily === 'merriweather' ? 'font-merriweather' :
                     settings.fontFamily === 'dyslexic' ? 'font-dyslexic' :
@@ -798,6 +841,26 @@ return (
                       {formatBionicText(paragraph)}
                     </p>
                   ))}
+                  <div className="mt-12 pt-8 border-t border-current/10 flex items-center justify-between">
+                    <button
+                      onClick={() => setPageNumber(p => Math.max(1, p - 1))}
+                      disabled={pageNumber <= 1}
+                      className={`px-4 py-2 rounded-xl transition cursor-pointer text-sm font-medium ${
+                        pageNumber <= 1 ? 'opacity-30 cursor-not-allowed' : 'hover:bg-black/5 dark:hover:bg-white/5'
+                      }`}
+                    >
+                      ← Previous Page
+                    </button>
+                    <button
+                      onClick={() => setPageNumber(p => Math.min(numPages, p + 1))}
+                      disabled={pageNumber >= numPages}
+                      className={`px-4 py-2 rounded-xl transition cursor-pointer text-sm font-medium ${
+                        pageNumber >= numPages ? 'opacity-30 cursor-not-allowed' : 'hover:bg-black/5 dark:hover:bg-white/5'
+                      }`}
+                    >
+                      Next Page →
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-64 opacity-50 text-center">
@@ -810,7 +873,7 @@ return (
             </div>
             
             <div 
-              className={`shadow-2xl transition-all duration-300 ${themeStyle.container} ${settings.layoutMode !== 'scroll' ? 'rounded-lg overflow-hidden' : ''} ${pdfViewMode === 'native' ? 'block' : 'hidden'}`}
+              className={`shadow-2xl transition-all duration-300 ${themeStyle.container} ${settings.layoutMode !== 'scroll' ? 'rounded-lg ' : ''} ${pdfViewMode === 'native' ? 'block' : 'hidden'}`}
               style={{ 
                 maxWidth: pdfMaxWidth * scale,
                 width: '100%' 
@@ -837,7 +900,7 @@ return (
                           key={`page_${pNum}`} 
                           data-page-number={pNum}
                           ref={(el) => pageRefs.current[pNum] = el as any}
-                          className="shadow-xl max-w-full overflow-hidden bg-white relative flex justify-center"
+                          className="shadow-xl  bg-white relative flex justify-center"
                           style={{ minHeight: (pdfMaxWidth * scale) * 1.414, width: pdfMaxWidth * scale }}
                         >
                           {isVisible ? (
@@ -863,8 +926,8 @@ return (
                   </div>
                 ) : settings.layoutMode === 'double' && containerWidth > 800 ? (
                   // Double Page Rendering
-                  <div className="flex w-full justify-center gap-1 md:gap-4 p-4 max-w-full overflow-hidden">
-                    <div className="shadow-xl overflow-hidden flex-shrink-0 bg-white" style={{ width: (pdfMaxWidth * scale) / 2 }}>
+                  <div className="flex w-full justify-center gap-1 md:gap-4 p-4 ">
+                    <div className="shadow-xl flex-shrink-0 bg-white relative" style={{ width: (pdfMaxWidth * scale) / 2 }}>
                       <Page suspense={false}
                         pageNumber={pageNumber}
                         width={(pdfMaxWidth * scale) / 2}
@@ -876,7 +939,7 @@ return (
                       {renderHighlights(pageNumber)}
                     </div>
                     {pageNumber + 1 <= numPages && (
-                      <div className="shadow-xl overflow-hidden flex-shrink-0 bg-white" style={{ width: (pdfMaxWidth * scale) / 2 }}>
+                      <div className="shadow-xl flex-shrink-0 bg-white relative" style={{ width: (pdfMaxWidth * scale) / 2 }}>
                         <Page suspense={false}
                           pageNumber={pageNumber + 1}
                           width={(pdfMaxWidth * scale) / 2}
@@ -891,7 +954,7 @@ return (
                   </div>
                 ) : (
                   // Single Page Rendering
-                  <div className="max-w-full overflow-hidden flex justify-center shadow-xl bg-white">
+                  <div className="flex justify-center shadow-xl bg-white relative">
                     <Page suspense={false}
                       pageNumber={pageNumber}
                       width={pdfMaxWidth * scale}
@@ -910,21 +973,7 @@ return (
         )}
       </div>
       
-      {/* Footer Info */}
-      <div className={`absolute bottom-0 left-0 right-0 p-4 flex justify-between items-center text-xs opacity-60 backdrop-blur-md z-20 ${
-        settings.theme === 'dusk' || settings.theme === 'amoled' ? 'bg-black/20' : 'bg-white/20'
-      }`}>
-        <div>{book.title}</div>
-        <div className="flex items-center gap-2">
-          <span>{pageNumber} of {numPages || '-'}</span>
-          <div className="w-32 h-1 bg-current/20 rounded-full overflow-hidden ml-2">
-            <div 
-              className="h-full bg-current rounded-full" 
-              style={{ width: `${numPages ? (pageNumber / numPages) * 100 : 0}%` }}
-            />
-          </div>
-        </div>
-      </div>
+
 
       <SelectionPopup
         position={selectionPosition}
@@ -989,7 +1038,7 @@ return (
       {isTOCOpen && (
         <>
           <div className="absolute inset-0 bg-black/20 z-40 backdrop-blur-sm" onClick={() => setIsTOCOpen(false)} />
-          <div className={`absolute inset-y-0 left-0 w-80 shadow-2xl z-50 border-r flex flex-col transform transition-transform ${themeStyle.container} ${themeStyle.border} ${themeStyle.text}`}>
+          <div className={`absolute inset-y-0 left-0 w-[80%] max-w-sm sm:w-80 shadow-2xl z-50 border-r flex flex-col transform transition-transform ${themeStyle.container} ${themeStyle.border} ${themeStyle.text}`}>
             <div className={`p-4 border-b ${themeStyle.border} flex justify-between items-center`}>
               <h3 className="font-semibold text-sm">Table of Contents</h3>
               <button onClick={() => setIsTOCOpen(false)} className={`p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/10 ${themeStyle.text}`}>
@@ -1023,15 +1072,15 @@ return (
 
       {/* Universal Reading Progress Bar at the bottom */}
       {!isZenMode && (
-        <div className="absolute bottom-0 left-0 right-0 z-30 pointer-events-none">
+        <div className="absolute bottom-0 left-0 right-0 z-30">
           <ReadingProgressBar
             book={book}
-            currentChapterIndex={pageNumber - 1}
-            currentPageIndex={0}
-            totalPagesInChapter={1}
+            currentChapterIndex={0}
+            currentPageIndex={pageNumber - 1}
+            totalPagesInChapter={numPages || 1}
             wordsPerPage={250}
-            onNavigatePage={() => {}}
-            onNavigateChapter={(page) => changePage(page - pageNumber + 1)}
+            onNavigatePage={(page) => setPageNumber(page + 1)}
+            onNavigateChapter={() => {}}
             onOpenTOC={() => setIsTOCOpen(true)}
             isBookmarked={false}
             onToggleBookmark={() => {}}

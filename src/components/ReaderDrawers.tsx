@@ -44,7 +44,7 @@ export const TOCDrawer: React.FC<TOCDrawerProps> = ({
       {/* Backdrop */}
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <aside
-        className="fixed left-0 top-0 bottom-0 w-80 sm:w-96 bg-slate-900 border-r border-slate-800 z-40 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200 select-none"
+        className="fixed left-0 top-0 bottom-0 w-[85vw] max-w-[320px] sm:w-96 bg-slate-900 border-r border-slate-800 z-40 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200 select-none"
         aria-label="Table of Contents"
       >
       <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
@@ -214,7 +214,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
       {/* Backdrop */}
       <div className="fixed inset-0 z-30" onClick={onClose} />
       <aside
-        className="fixed left-0 top-0 bottom-0 w-80 sm:w-96 bg-slate-900 border-r border-slate-800 z-40 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200 select-none text-slate-200"
+        className="fixed left-0 top-0 bottom-0 w-[85vw] max-w-[320px] sm:w-96 bg-slate-900 border-r border-slate-800 z-40 shadow-2xl flex flex-col animate-in slide-in-from-left duration-200 select-none text-slate-200"
         aria-label="Annotations & Highlights"
       >
       {/* Header */}

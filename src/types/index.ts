@@ -152,7 +152,7 @@ export interface ReadingSessionStats {
   date: string;
 }
 
-export type OSPlatform = 'windows' | 'macos' | 'linux' | 'other';
+export type OSPlatform = 'windows' | 'macos' | 'linux' | 'android' | 'ios' | 'other';
 
 export interface SearchIndexResult {
   bookId: string;
