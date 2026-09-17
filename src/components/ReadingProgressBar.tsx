@@ -131,9 +131,10 @@ export const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
 
   return (
     <footer
-      className="h-12 border-t border-current/10 px-4 sm:px-6 flex items-center justify-between text-xs z-30 shrink-0 select-none backdrop-blur-xs relative"
+      className="safe-pb border-t border-current/10 z-30 shrink-0 select-none backdrop-blur-xs relative"
       aria-label="Reading Navigation & Progress"
     >
+      <div className="h-12 px-2 sm:px-6 flex items-center justify-between gap-2 text-xs w-full overflow-hidden">
       {/* Interactive Floating Hover Preview Tooltip */}
       {isHoveringBar && hoverPosition && (
         <div
@@ -299,6 +300,7 @@ export const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
+      </div>
       </div>
     </footer>
   );

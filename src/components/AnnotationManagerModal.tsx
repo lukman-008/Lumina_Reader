@@ -500,7 +500,7 @@ export const AnnotationManagerModal: React.FC<AnnotationManagerModalProps> = ({
                         : 'bg-slate-950/60 hover:bg-slate-950/90 border-slate-800'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-wrap gap-2 items-center justify-between">
                       <div className="flex items-center gap-2">
                         <input
                           type="checkbox"

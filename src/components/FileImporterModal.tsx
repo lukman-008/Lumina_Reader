@@ -419,12 +419,12 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
                 />
               </div>
 
-              <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+              <div className="flex flex-wrap gap-2 items-center justify-between text-xs text-slate-500 pt-1">
                 <span>{countWords(pasteContent).toLocaleString()} words estimated</span>
                 <button
                   onClick={handleImportPastedArticle}
                   disabled={!pasteTitle.trim() || !pasteContent.trim()}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-semibold text-xs transition cursor-pointer flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 disabled:opacity-50 text-slate-950 font-semibold text-xs transition cursor-pointer flex items-center gap-1.5"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Import into Library</span>
@@ -436,7 +436,7 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
 
         {/* Footer */}
         {activeTab === 'upload' && (
-          <div className="p-4 border-t border-slate-800 flex items-center justify-between shrink-0 bg-slate-950/40">
+          <div className="p-4 border-t border-slate-800 flex flex-wrap gap-3 items-center justify-between shrink-0 bg-slate-950/40">
             <span className="text-xs text-slate-400">
               {successfulCount > 0 ? `${successfulCount} files ready to save` : 'Select files to import'}
             </span>
@@ -450,7 +450,7 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
               <button
                 onClick={handleSaveAllToLibrary}
                 disabled={successfulCount === 0 || isProcessing}
-                className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 font-semibold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-md"
+                className="px-4 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 disabled:opacity-40 text-slate-950 font-semibold text-xs transition cursor-pointer flex items-center gap-1.5 shadow-md"
               >
                 {isProcessing ? (
                   <div className="w-3.5 h-3.5 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />

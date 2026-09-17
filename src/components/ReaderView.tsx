@@ -910,7 +910,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       onTouchEnd={handleSwipeEnd}
       
       className={`${
-        isZenMode ? 'h-screen' : 'h-[calc(100vh-2.75rem)]'
+        isZenMode ? 'h-[100dvh]' : 'h-[calc(100dvh-2.75rem)]'
       } w-full flex flex-col transition-colors duration-200 relative overflow-hidden ${themeStyle.bg} ${themeStyle.text}`}
     >
       {/* Circadian Blue Light Warmth Overlay */}
@@ -940,7 +940,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         <div className="fixed top-4 right-4 z-50 transition-opacity duration-300 opacity-30 hover:opacity-100">
           <button
             onClick={onToggleZenMode}
-            className="flex items-center gap-2 px-3 py-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700/50 backdrop-blur-md shadow-lg cursor-pointer"
+            className="flex items-center gap-2 px-3 py-2 bg-slate-900/90 hover:bg-slate-800 active:scale-95 text-slate-200 rounded-lg border border-slate-700/50 backdrop-blur-md shadow-lg cursor-pointer"
             title="Exit Zen Mode (Esc)"
           >
             <Minimize2 className="w-4 h-4 text-slate-400" />
@@ -954,11 +954,11 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         className={`${isZenMode ? 'fixed top-0 left-0 right-0 z-50 transition-all duration-300' : 'relative z-20 shrink-0'} ${isZenMode && !zenNavVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
       >
         <nav
-          className={`h-12 border-b ${themeStyle.border} px-4 flex items-center justify-between select-none backdrop-blur-xs ${isZenMode ? themeStyle.bg : ''}`}
+          className={`h-12 border-b ${themeStyle.border} px-2 sm:px-4 flex items-center gap-2 select-none backdrop-blur-xs w-full overflow-hidden ${isZenMode ? themeStyle.bg : ''}`}
           aria-label="Reading Controls"
         >
           {/* Left: Back & Table of Contents */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <button
               onClick={onBackToLibrary}
               className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition flex items-center gap-1.5 text-xs font-medium cursor-pointer ${themeStyle.text}`}
@@ -979,7 +979,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
           </div>
 
           {/* Center: Book Progress & Quick Search */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => setIsSearchOpen(true)}
               className={`flex items-center gap-1.5 px-3 py-1 rounded-full border ${themeStyle.border} text-xs ${themeStyle.subtext} hover:opacity-100 transition cursor-pointer`}
@@ -989,8 +989,8 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
             </button>
           </div>
 
-          {/* Right: Ambient, Speed, AI, Typography, Zen */}
-          <div className="flex items-center gap-1 sm:gap-1.5">
+          {/* Right: Ambient, Speed, AI, Typography, Zen (Scrollable on mobile) */}
+          <div className="flex-1 min-w-0 h-full flex items-center justify-end"><div className="flex items-center overflow-x-auto scrollbar-hide w-full h-full mask-fade-right"><div className="ml-auto flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0 pr-2 [&>button]:shrink-0">
             {/* Auto-Pacing toggle */}
             <button
               onClick={() => setIsAutoPacing((prev) => !prev)}
@@ -1115,7 +1115,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
             >
               <Maximize2 className="w-4 h-4" />
             </button>
-          </div>
+          </div></div></div>
         </nav>
       </div>
 
@@ -1243,52 +1243,72 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         onClose={() => setIsTTSOpen(false)}
       />
 
-      {/* Search in Book Modal */}
+      {/* Spotlight Search in Book Modal */}
       {isSearchOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4" onClick={() => setIsSearchOpen(false)}>
-          <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 text-slate-100 flex flex-col max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <Search className="w-4 h-4 text-amber-400" />
-                <h3 className="text-sm font-semibold">Search in "{book.title}"</h3>
-              </div>
-              <button
-                onClick={() => setIsSearchOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="py-3">
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={() => setIsSearchOpen(false)}>
+          <div className="w-full max-w-2xl rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.7)] text-slate-100 flex flex-col max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center px-4 py-3 border-b border-slate-800/80">
+              <Search className="w-5 h-5 text-amber-500 shrink-0" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Type keyword or phrase..."
+                placeholder={`Search in "${book.title}"...`}
                 autoFocus
-                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-sm focus:outline-none focus:border-amber-500"
+                className="flex-1 bg-transparent border-none outline-none px-4 text-base placeholder:text-slate-500 text-slate-100 font-medium"
               />
+              <button
+                onClick={() => setIsSearchOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition cursor-pointer shrink-0 text-[10px] font-mono border border-slate-700"
+              >
+                ESC
+              </button>
             </div>
-
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
-              {searchQuery && searchResults.length === 0 ? (
-                <div className="text-center py-8 text-slate-400">No occurrences found.</div>
+            <div className="flex-1 overflow-y-auto p-2 bg-slate-950/40">
+              {!searchQuery ? (
+                <div className="text-center py-10 text-slate-500 space-y-2">
+                  <Search className="w-8 h-8 mx-auto opacity-30" />
+                  <p className="text-xs">Find characters, quotes, or terminology.</p>
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="text-center py-10 text-slate-500 space-y-2">
+                  <p className="text-sm font-medium">No results found for "{searchQuery}"</p>
+                  <p className="text-xs opacity-70">Check spelling or try a different term.</p>
+                </div>
               ) : (
-                searchResults.map((res, i) => (
-                  <div
-                    key={i}
-                    onClick={() => {
-                      setCurrentChapterIndex(res.chapterIndex);
-                      setCurrentPageIndex(0);
-                      setIsSearchOpen(false);
-                    }}
-                    className="p-3 rounded-xl bg-slate-800 hover:bg-slate-750 cursor-pointer transition border border-slate-700/60"
-                  >
-                    <span className="font-semibold text-amber-400 block mb-1">{res.chapterTitle}</span>
-                    <p className="text-slate-300 italic">{res.snippet}</p>
-                  </div>
-                ))
+                <div className="space-y-1 pb-4">
+                  {searchResults.map((res, i) => (
+                    <div
+                      key={i}
+                      onClick={() => {
+                        setCurrentChapterIndex(res.chapterIndex);
+                        setCurrentPageIndex(0);
+                        setIsSearchOpen(false);
+                      }}
+                      className="group p-3 rounded-xl bg-transparent hover:bg-slate-800/80 active:scale-[0.98] cursor-pointer transition-all border border-transparent hover:border-slate-700/60"
+                    >
+                      <div className="text-amber-400 text-[11px] font-semibold mb-1 truncate flex items-center gap-1.5">
+                         <span className="w-1.5 h-1.5 rounded-full bg-amber-500/50" />
+                        {res.chapterTitle}
+                      </div>
+                      <div className="text-slate-300 text-xs font-serif line-clamp-2 leading-relaxed">
+                        {(() => {
+                          if (!searchQuery) return res.snippet;
+                          const parts = res.snippet.split(new RegExp(`(${searchQuery})`, 'gi'));
+                          return (
+                            <span>
+                              {parts.map((part, idx) => 
+                                part.toLowerCase() === searchQuery.toLowerCase()
+                                  ? <span key={idx} className="bg-amber-500/30 text-amber-200 font-medium rounded-sm px-0.5">{part}</span>
+                                  : part
+                              )}
+                            </span>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -1340,14 +1360,14 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         <article
           style={{
             maxWidth: settings.layoutMode === 'double' ? '1200px' : '780px',
-            paddingLeft: `${settings.marginWidth}px`,
-            paddingRight: `${settings.marginWidth}px`,
+            paddingLeft: `max(16px, min(${settings.marginWidth}px, 8vw))`,
+            paddingRight: `max(16px, min(${settings.marginWidth}px, 8vw))`,
             fontSize: `${settings.fontSize}px`,
             lineHeight: settings.lineHeight,
             letterSpacing: `${settings.letterSpacing || 0}px`,
             textAlign: settings.textAlign,
           }}
-          className={`mx-auto w-full pt-8 pb-16 reading-content ${FONT_CLASSES[settings.fontFamily]}`}
+          className={`mx-auto w-full pt-8 pb-24 reading-content ${FONT_CLASSES[settings.fontFamily]}`}
         >
           {/* Chapter header */}
           {safePageIndex === 0 && (

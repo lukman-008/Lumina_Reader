@@ -121,7 +121,7 @@ export const SoundscapeModal: React.FC<SoundscapeModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl p-6 text-slate-100 flex flex-col space-y-6" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl p-6 text-slate-100 flex flex-col space-y-6 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -137,7 +137,7 @@ export const SoundscapeModal: React.FC<SoundscapeModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition"
           >
             <X className="w-5 h-5" />
           </button>
@@ -145,7 +145,7 @@ export const SoundscapeModal: React.FC<SoundscapeModalProps> = ({
 
         {/* Soundscapes Grid */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap gap-2 items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
               Procedural Soundscape
             </span>
@@ -169,7 +169,7 @@ export const SoundscapeModal: React.FC<SoundscapeModalProps> = ({
                   className={`p-3 rounded-2xl border text-left transition flex flex-col justify-between gap-2 cursor-pointer ${
                     isActive
                       ? 'bg-amber-500/20 border-amber-500/60 shadow-lg shadow-amber-500/10 ring-1 ring-amber-500'
-                      : 'bg-slate-800/70 border-slate-700/80 hover:bg-slate-800'
+                      : 'bg-slate-800/70 border-slate-700/80 hover:bg-slate-800 active:scale-95'
                   } ${sc.color}`}
                 >
                   <div className="flex items-center justify-between w-full">
@@ -274,7 +274,7 @@ export const SoundscapeModal: React.FC<SoundscapeModalProps> = ({
         <div className="pt-2 flex justify-end">
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-semibold shadow-lg shadow-amber-500/10 transition cursor-pointer"
+            className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-semibold shadow-lg shadow-amber-500/10 transition cursor-pointer"
           >
             Done
           </button>

@@ -106,7 +106,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition"
           >
             <X className="w-5 h-5" />
           </button>
@@ -139,7 +139,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
             <button
               onClick={handleExport}
               disabled={isExporting}
-              className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
             >
               <Download className="w-3.5 h-3.5" />
               <span>{isExporting ? 'Packaging...' : 'Export Backup'}</span>
@@ -224,7 +224,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
                 <button
                   onClick={() => handleRestore('replace')}
                   disabled={isRestoring}
-                  className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-semibold transition"
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-semibold transition"
                 >
                   Replace All
                 </button>

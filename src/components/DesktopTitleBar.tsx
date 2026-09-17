@@ -126,7 +126,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
       </div>
 
       {/* Right: Quick desktop controls */}
-      <div className="flex items-center gap-1 sm:gap-2" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+      <div className="flex items-center gap-1 sm:gap-2 flex-wrap overflow-hidden justify-end" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
         {/* Offline / Online indicator */}
         <div
           className={`hidden md:flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
@@ -159,7 +159,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
             className={`p-1.5 rounded-md transition relative cursor-pointer ${
               isPlayingAudio
                 ? 'text-amber-400 bg-amber-500/20 border border-amber-500/40'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800 active:scale-95'
             }`}
             title="Atmospheric Soundscapes & Circadian Warmth (S)"
           >
@@ -174,7 +174,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         {onOpenHabits && (
           <button
             onClick={onOpenHabits}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-amber-400 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer border border-transparent hover:border-slate-700"
+            className="flex items-center gap-1.5 px-2 py-1 rounded-md text-amber-400 hover:text-amber-300 hover:bg-slate-800 active:scale-95 transition cursor-pointer border border-transparent hover:border-slate-700"
             title="Reading Habits, Streaks & Pomodoro Timer (H)"
           >
             <div className="flex items-center gap-0.5">
@@ -201,7 +201,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         {onOpenSearchIndex && (
           <button
             onClick={onOpenSearchIndex}
-            className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition cursor-pointer"
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-slate-400 hover:text-amber-400 hover:bg-slate-800 active:scale-95 transition cursor-pointer"
             title="Search Index across entire library (⌘K)"
           >
             <Search className="w-3.5 h-3.5" />
@@ -217,7 +217,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         {onOpenAnnotationManager && (
           <button
             onClick={onOpenAnnotationManager}
-            className="p-1.5 rounded-md text-slate-400 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer"
+            className="p-1.5 rounded-md text-slate-400 hover:text-amber-300 hover:bg-slate-800 active:scale-95 transition cursor-pointer"
             title="Annotation & Notes Manager"
           >
             <Highlighter className="w-3.5 h-3.5" />
@@ -228,7 +228,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         {!isMobile && (
           <button
             onClick={onOpenExportGuide}
-            className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition hidden sm:block"
+            className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 active:scale-95 transition hidden sm:block"
             title="Cross-platform desktop build instructions"
           >
             <Download className="w-3.5 h-3.5" />
@@ -239,7 +239,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         {!isMobile && (
           <button
             onClick={onOpenShortcuts}
-            className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition hidden sm:block"
+            className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 active:scale-95 transition hidden sm:block"
             title="Keyboard shortcuts"
           >
             <Keyboard className="w-3.5 h-3.5" />
@@ -250,7 +250,7 @@ export const DesktopTitleBar: React.FC<DesktopTitleBarProps> = ({
         {!isMobile && (
           <button
             onClick={onToggleZenMode}
-            className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
+            className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-slate-800 active:scale-95 transition"
             title={isZenMode ? 'Exit Zen Mode (Esc)' : 'Zen Distraction-Free Reading (Z)'}
           >
             {isZenMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}

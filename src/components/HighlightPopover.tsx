@@ -60,7 +60,7 @@ export const HighlightPopover: React.FC<HighlightPopoverProps> = ({
       onMouseDown={(e) => { if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return; e.preventDefault(); }}
       style={{
         left: `${Math.max(10, Math.min(position.x - 140, window.innerWidth - 320))}px`,
-        top: `${Math.max(10, position.y - 10)}px`,
+        top: `${Math.max(10, Math.min(position.y - 10, window.innerHeight - 300))}px`,
       }}
       className="fixed z-50 w-72 rounded-2xl bg-slate-900 border border-slate-700/90 shadow-2xl p-3 text-slate-100 flex flex-col space-y-2.5 animate-in fade-in zoom-in-95 duration-100 select-none text-xs"
     >

@@ -155,7 +155,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
           {/* Add Note Button with Scope Preview */}
           <button
             onClick={() => setIsAddingNote(true)}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-slate-300 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer font-medium text-[11px]"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-slate-300 hover:text-amber-300 hover:bg-slate-800 active:scale-95 transition cursor-pointer font-medium text-[11px]"
             title={`Attach note to selected ${selectionScope.type}`}
           >
             <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
@@ -165,7 +165,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
           {/* Read aloud action */}
           <button
             onClick={onReadAloud}
-            className="p-1.5 rounded-lg text-slate-300 hover:text-amber-300 hover:bg-slate-800 transition cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-300 hover:text-amber-300 hover:bg-slate-800 active:scale-95 transition cursor-pointer"
             title="Read selection aloud (Offline TTS)"
           >
             <Volume2 className="w-3.5 h-3.5" />
@@ -184,7 +184,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
           {/* Copy */}
           <button
             onClick={copySelection}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition cursor-pointer"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 active:scale-95 transition cursor-pointer"
             title="Copy selection"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}

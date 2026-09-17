@@ -1,3 +1,4 @@
+import { formatCompactNumber } from "../utils/format";
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   BookOpen,
@@ -311,7 +312,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   };
 
   return (
-    <div className="w-full flex-1 min-h-[calc(100vh-2.75rem)] bg-slate-950 text-slate-100 p-6 sm:p-8 pb-36 sm:pb-44 max-w-7xl mx-auto flex flex-col space-y-8 animate-in fade-in duration-200">
+    <div className="w-full flex-1 min-h-[calc(100dvh-2.75rem)] bg-slate-950 text-slate-100 p-4 sm:p-8 pb-36 sm:pb-44 max-w-7xl mx-auto flex flex-col space-y-8 animate-in fade-in duration-200">
       {/* Top Banner / Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Books Volume */}
@@ -337,7 +338,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               Library Volume
             </span>
             <div className="text-2xl font-bold text-slate-100 mt-1">
-              {totalWords.toLocaleString()} <span className="text-sm font-normal text-slate-400">words</span>
+              {formatCompactNumber(totalWords)} <span className="text-sm font-normal text-slate-400">words</span>
             </div>
             <span className="text-[11px] text-slate-400 flex items-center gap-1 mt-1">
               <Clock className="w-3 h-3" /> ~{totalReadingHours} hours of reading
@@ -485,7 +486,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               }
             }}
             disabled={isImporting}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-semibold shadow-lg shadow-amber-500/10 transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-semibold shadow-lg shadow-amber-500/10 transition cursor-pointer"
             title="Import EPUB, TXT, MD, PDF or Web Articles"
           >
             <FileUp className="w-4 h-4" />
@@ -495,7 +496,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       </div>
 
       {/* Shelves & Collections Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none border-b border-slate-800/80 pb-3">
+      <div className="flex items-center flex-wrap gap-2 border-b border-slate-800/80 pb-3">
         <button
           onClick={() => setActiveTab('all')}
           className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition whitespace-nowrap cursor-pointer ${
@@ -589,7 +590,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       </div>
 
       {/* Layout Toolbar: View Mode & Sort Dropdown */}
-      <div className="flex items-center justify-between text-xs text-slate-400 pt-1">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 pt-1">
         <div className="flex items-center gap-2">
           <span>
             Showing <strong className="text-slate-200">{sortedBooks.length}</strong> books
@@ -742,9 +743,21 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
       {/* Books Shelf Grid or Compact List */}
       {sortedBooks.length === 0 ? (
-        <div className="py-16 text-center text-slate-500 text-sm space-y-2">
-          <BookOpen className="w-8 h-8 mx-auto opacity-40 text-slate-400" />
-          <p>No books found in this shelf or search filter.</p>
+        <div className="py-24 text-center text-slate-500 text-sm space-y-4 flex flex-col items-center justify-center border-2 border-dashed border-slate-800 rounded-3xl bg-slate-900/30 mx-auto w-full">
+          <div className="w-16 h-16 rounded-full bg-slate-800/50 flex items-center justify-center text-slate-400">
+            <BookOpen className="w-8 h-8 opacity-60" />
+          </div>
+          <div>
+            <h3 className="text-slate-300 font-semibold text-base mb-1">Your library is empty</h3>
+            <p className="max-w-xs mx-auto">No books found in this shelf or search filter. Import some files to start reading.</p>
+          </div>
+          <button
+            onClick={() => setIsImporterOpen(true)}
+            className="px-5 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 active:scale-95 text-amber-400 font-semibold border border-amber-500/20 flex items-center gap-2 transition"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Import Books</span>
+          </button>
         </div>
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -887,7 +900,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
                     <button
                       onClick={(e) => handleDeleteBook(e, book.id)}
-                      className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition"
+                      className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-slate-800 active:scale-95 transition"
                       title="Delete book"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -973,7 +986,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400">
                       <span>{book.author}</span>
                       <span className="text-slate-600">•</span>
-                      <span>{book.totalWords.toLocaleString()} words</span>
+                      <span>{formatCompactNumber(book.totalWords)} words</span>
                       <span className="text-slate-600 hidden md:inline">•</span>
                       <span className="hidden md:inline">~{estMinutes} min read</span>
                     </div>
@@ -999,7 +1012,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   {/* Favorite Star */}
                   <button
                     onClick={(e) => handleToggleFavorite(e, book)}
-                    className="p-1.5 text-slate-400 hover:text-amber-400 rounded-lg hover:bg-slate-800 transition"
+                    className="p-1.5 text-slate-400 hover:text-amber-400 rounded-lg hover:bg-slate-800 active:scale-95 transition"
                     title={book.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                   >
                     <Star
@@ -1021,7 +1034,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   {/* Delete button */}
                   <button
                     onClick={(e) => handleDeleteBook(e, book.id)}
-                    className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition"
+                    className="p-1.5 text-slate-500 hover:text-rose-400 rounded-lg hover:bg-slate-800 active:scale-95 transition"
                     title="Delete book"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -1094,7 +1107,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </button>
               <button
                 onClick={handleCreateShelf}
-                className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-semibold"
+                className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-semibold"
               >
                 Create Shelf
               </button>
@@ -1119,7 +1132,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <div className="space-y-1.5 max-h-60 overflow-y-auto">
               <button
                 onClick={() => handleBulkAssignShelf(null)}
-                className="w-full text-left p-2 rounded-xl hover:bg-slate-800 text-xs text-slate-300 flex items-center gap-2"
+                className="w-full text-left p-2 rounded-xl hover:bg-slate-800 active:scale-95 text-xs text-slate-300 flex items-center gap-2"
               >
                 <span>None (Remove from shelf)</span>
               </button>
@@ -1127,7 +1140,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 <button
                   key={s.id}
                   onClick={() => handleBulkAssignShelf(s.id)}
-                  className="w-full text-left p-2 rounded-xl hover:bg-slate-800 text-xs text-slate-200 flex items-center gap-2"
+                  className="w-full text-left p-2 rounded-xl hover:bg-slate-800 active:scale-95 text-xs text-slate-200 flex items-center gap-2"
                 >
                   <Folder className="w-3.5 h-3.5 text-amber-400" />
                   <span>{s.name}</span>
@@ -1169,7 +1182,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
               </button>
               <button
                 onClick={handleBulkAddTag}
-                className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-semibold"
+                className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-semibold"
               >
                 Apply Tag
               </button>

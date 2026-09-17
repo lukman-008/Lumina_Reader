@@ -1,3 +1,4 @@
+import { formatCompactNumber } from "../utils/format";
 import React, { useState, useEffect } from 'react';
 import {
   Flame,
@@ -174,7 +175,7 @@ export const ReadingHabitsDashboard: React.FC<ReadingHabitsDashboardProps> = ({
             </div>
             <div className="mt-2">
               <span className="text-2xl font-bold font-mono text-slate-100">
-                {(stats.totalWordsRead / 1000).toFixed(1)}k
+                {formatCompactNumber(stats.totalWordsRead)}
               </span>
               <span className="text-[10px] text-slate-400 block mt-0.5">
                 {stats.totalMinutes} total mins
@@ -185,7 +186,7 @@ export const ReadingHabitsDashboard: React.FC<ReadingHabitsDashboardProps> = ({
 
         {/* 35-Day Reading Heatmap Grid */}
         <div className="p-4 rounded-2xl bg-slate-800/50 border border-slate-700/70 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-amber-400" />
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-300">
@@ -209,7 +210,7 @@ export const ReadingHabitsDashboard: React.FC<ReadingHabitsDashboardProps> = ({
               <div
                 key={item.date}
                 title={`${item.date}: ${item.minutes} minutes read`}
-                className={`h-8 rounded-lg border flex flex-col items-center justify-center text-[10px] transition-all hover:scale-105 cursor-pointer ${
+                className={`h-8 rounded-lg border flex flex-col items-center justify-center text-[10px] transition-all hover:scale-105 active:scale-95 cursor-pointer ${
                   LEVEL_COLORS[item.level]
                 }`}
               >
@@ -220,7 +221,7 @@ export const ReadingHabitsDashboard: React.FC<ReadingHabitsDashboardProps> = ({
         </div>
 
         {/* Integrated Pomodoro / Reading Focus Timer */}
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-800/80 to-slate-800/80 border border-amber-500/20 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-800/80 to-slate-800/80 border border-amber-500/20 flex flex-col sm:flex-row flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-amber-500/30 flex items-center justify-center text-amber-400 font-mono font-bold text-lg shadow-inner">
               {formatTimerTime(timerSeconds)}
@@ -261,7 +262,7 @@ export const ReadingHabitsDashboard: React.FC<ReadingHabitsDashboardProps> = ({
             {/* Play/Pause */}
             <button
               onClick={handleToggleTimer}
-              className="p-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold shadow-xs transition"
+              className="p-2 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-semibold shadow-xs transition"
               title={isTimerActive ? 'Pause Timer' : 'Start Timer'}
             >
               {isTimerActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
@@ -270,7 +271,7 @@ export const ReadingHabitsDashboard: React.FC<ReadingHabitsDashboardProps> = ({
             {/* Reset */}
             <button
               onClick={handleResetTimer}
-              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-white transition"
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-750 active:scale-95 text-slate-400 hover:text-white transition"
               title="Reset Timer"
             >
               <RotateCcw className="w-4 h-4" />
@@ -301,7 +302,7 @@ export const ReadingHabitsDashboard: React.FC<ReadingHabitsDashboardProps> = ({
                   <div className="flex items-center gap-3 text-slate-400 text-[11px] shrink-0 font-mono">
                     <span>{sess.durationMinutes} mins</span>
                     <span>·</span>
-                    <span>{sess.wordsRead.toLocaleString()} words</span>
+                    <span>{formatCompactNumber(sess.wordsRead)} words</span>
                     <span>·</span>
                     <span>{sess.date}</span>
                   </div>
@@ -315,7 +316,7 @@ export const ReadingHabitsDashboard: React.FC<ReadingHabitsDashboardProps> = ({
         <div className="pt-2 flex justify-end">
           <button
             onClick={onClose}
-            className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-semibold transition cursor-pointer shadow-xs"
+            className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-semibold transition cursor-pointer shadow-xs"
           >
             Close Dashboard
           </button>

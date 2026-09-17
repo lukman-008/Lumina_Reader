@@ -529,7 +529,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   }, []);
 
 return (
-    <div className={`w-full flex flex-col transition-colors duration-200 relative  ${themeStyle.bg} ${themeStyle.text} ${isZenMode ? 'h-screen' : 'h-[calc(100vh-2.75rem)]'}`}>
+    <div className={`w-full flex flex-col transition-colors duration-200 relative  ${themeStyle.bg} ${themeStyle.text} ${isZenMode ? 'h-[100dvh]' : 'h-[calc(100dvh-2.75rem)]'}`}>
       <ErrorBoundary>
       
 
@@ -579,7 +579,7 @@ return (
         <div className="fixed top-4 right-4 z-50 transition-opacity duration-300 opacity-30 hover:opacity-100 flex items-center gap-2">
           <button
             onClick={onToggleZenMode}
-            className="flex items-center gap-2 px-3 py-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 rounded-lg border border-slate-700/50 backdrop-blur-md shadow-lg cursor-pointer"
+            className="flex items-center gap-2 px-3 py-2 bg-slate-900/90 hover:bg-slate-800 active:scale-95 text-slate-200 rounded-lg border border-slate-700/50 backdrop-blur-md shadow-lg cursor-pointer"
             title="Exit Zen Mode (Esc)"
           >
             <Minimize2 className="w-4 h-4 text-slate-400" />
@@ -593,9 +593,9 @@ return (
         className={`${isZenMode ? 'fixed top-0 left-0 right-0 z-50 transition-all duration-300' : 'relative z-30 shrink-0'} ${isZenMode && !zenNavVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
       >
         <nav
-          className={`h-12 border-b ${themeStyle.border} px-4 flex items-center justify-between select-none backdrop-blur-xs ${isZenMode ? themeStyle.bg : ''}`}
+          className={`h-12 border-b ${themeStyle.border} px-2 sm:px-4 flex items-center gap-2 select-none backdrop-blur-xs w-full overflow-hidden ${isZenMode ? themeStyle.bg : ''}`}
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <button
               onClick={onBackToLibrary}
               className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition flex items-center gap-1.5 text-xs font-medium cursor-pointer ${themeStyle.text}`}
@@ -636,7 +636,7 @@ return (
             </button>
           </div>
 
-          <div className="flex items-center gap-1 sm:gap-1.5">
+          <div className="flex-1 min-w-0 h-full flex items-center justify-end"><div className="flex items-center overflow-x-auto scrollbar-hide w-full h-full mask-fade-right"><div className="ml-auto flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0 pr-2 [&>button]:shrink-0">
             <button
               onClick={() => setIsTypographyOpen((prev) => !prev)}
               className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${isTypographyOpen ? 'text-amber-500 bg-amber-500/10' : themeStyle.text}`}
@@ -756,7 +756,7 @@ return (
             >
               <Maximize className="w-4 h-4" />
             </button>
-          </div>
+          </div></div></div>
         </nav>
       </div>
 

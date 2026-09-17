@@ -249,7 +249,7 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
                       onClick={() => {
                         setQuestion('Explain the core philosophical argument in this chapter.');
                       }}
-                      className="block w-full text-left p-2 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-amber-300 transition"
+                      className="block w-full text-left p-2 rounded-lg bg-slate-800 hover:bg-slate-750 active:scale-95 text-slate-300 hover:text-amber-300 transition"
                     >
                       "Explain the core philosophical argument in this chapter."
                     </button>
@@ -257,7 +257,7 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
                       onClick={() => {
                         setQuestion('What does the Time Traveller notice about the Eloi?');
                       }}
-                      className="block w-full text-left p-2 rounded-lg bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-amber-300 transition"
+                      className="block w-full text-left p-2 rounded-lg bg-slate-800 hover:bg-slate-750 active:scale-95 text-slate-300 hover:text-amber-300 transition"
                     >
                       "What does the Time Traveller notice about the society?"
                     </button>
@@ -306,7 +306,7 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
               <button
                 onClick={handleFetchCharacter}
                 disabled={isLoading || !characterName.trim()}
-                className="px-3 py-2 rounded-lg bg-amber-500 text-slate-950 font-semibold text-xs disabled:opacity-50 hover:bg-amber-400 transition"
+                className="px-3 py-2 rounded-lg bg-amber-500 text-slate-950 font-semibold text-xs disabled:opacity-50 hover:bg-amber-400 active:scale-95 transition"
               >
                 Analyze
               </button>
@@ -326,7 +326,7 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
 
         {activeTab === 'summarize' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center flex-wrap gap-2 justify-between">
               <span className="text-xs font-semibold text-slate-300">Chapter Summary</span>
               <button
                 onClick={handleSummarizeChapter}
@@ -362,7 +362,7 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
               <button
                 onClick={handleExplainWord}
                 disabled={isLoading || !wordToExplain.trim()}
-                className="px-3 py-2 rounded-lg bg-amber-500 text-slate-950 font-semibold text-xs disabled:opacity-50 hover:bg-amber-400 transition"
+                className="px-3 py-2 rounded-lg bg-amber-500 text-slate-950 font-semibold text-xs disabled:opacity-50 hover:bg-amber-400 active:scale-95 transition"
               >
                 Explain
               </button>
@@ -394,7 +394,7 @@ export const AIAssistantDrawer: React.FC<AIAssistantDrawerProps> = ({
           <button
             type="submit"
             disabled={!question.trim() || isLoading}
-            className="p-2 rounded-lg bg-amber-500 text-slate-950 disabled:opacity-40 hover:bg-amber-400 transition"
+            className="p-2 rounded-lg bg-amber-500 text-slate-950 disabled:opacity-40 hover:bg-amber-400 active:scale-95 transition"
           >
             <Send className="w-4 h-4" />
           </button>

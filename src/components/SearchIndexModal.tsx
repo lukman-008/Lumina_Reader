@@ -98,7 +98,7 @@ export const SearchIndexModal: React.FC<SearchIndexModalProps> = ({
               </span>
               <button
                 onClick={onClose}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -139,7 +139,7 @@ export const SearchIndexModal: React.FC<SearchIndexModalProps> = ({
                   className={`px-2.5 py-1 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
                     searchScope === 'current'
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800 active:scale-95/60'
                   }`}
                 >
                   <BookOpen className="w-3 h-3" />
@@ -152,7 +152,7 @@ export const SearchIndexModal: React.FC<SearchIndexModalProps> = ({
                 className={`px-2.5 py-1 rounded-lg font-medium transition cursor-pointer flex items-center gap-1.5 ${
                   searchScope === 'all'
                     ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800 active:scale-95/60'
                 }`}
               >
                 <Layers className="w-3 h-3" />
@@ -231,7 +231,7 @@ export const SearchIndexModal: React.FC<SearchIndexModalProps> = ({
                   onNavigateToResult(res.bookId, res.chapterIndex, res.matchSnippet);
                   onClose();
                 }}
-                className="group p-3 rounded-xl bg-slate-950/60 hover:bg-slate-800/80 border border-slate-800 hover:border-amber-500/40 transition cursor-pointer space-y-1.5"
+                className="group p-3 rounded-xl bg-slate-950/60 hover:bg-slate-800 active:scale-95/80 active:scale-[0.98] border border-slate-800 hover:border-amber-500/40 transition cursor-pointer space-y-1.5"
               >
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2 font-medium">

@@ -54,7 +54,7 @@ export const TOCDrawer: React.FC<TOCDrawerProps> = ({
         </div>
         <button
           onClick={onClose}
-          className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+          className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
@@ -88,7 +88,7 @@ export const TOCDrawer: React.FC<TOCDrawerProps> = ({
               className={`w-full text-left p-3 rounded-xl transition flex items-start justify-between gap-3 cursor-pointer ${
                 isActive
                   ? 'bg-amber-500/15 border border-amber-500/30 text-amber-300 font-medium shadow-xs'
-                  : 'text-slate-300 hover:bg-slate-800/80 hover:text-slate-100'
+                  : 'text-slate-300 hover:bg-slate-800 active:scale-95/80 hover:text-slate-100'
               }`}
             >
               <div className="flex-1 min-w-0">
@@ -225,7 +225,7 @@ export const AnnotationsDrawer: React.FC<AnnotationsDrawerProps> = ({
         </div>
         <button
           onClick={onClose}
-          className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+          className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95 transition cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
