@@ -841,7 +841,7 @@ return (
                       {formatBionicText(paragraph)}
                     </p>
                   ))}
-                  <div className="mt-12 pt-8 border-t border-current/10 flex items-center justify-between">
+                  <div className="mt-12 pt-8 border-t border-current/10 flex flex-wrap gap-4 items-center justify-between">
                     <button
                       onClick={() => setPageNumber(p => Math.max(1, p - 1))}
                       disabled={pageNumber <= 1}
@@ -1039,7 +1039,7 @@ return (
         <>
           <div className="absolute inset-0 bg-black/20 z-40 backdrop-blur-sm" onClick={() => setIsTOCOpen(false)} />
           <div className={`absolute inset-y-0 left-0 w-[80%] max-w-sm sm:w-80 shadow-2xl z-50 border-r flex flex-col transform transition-transform ${themeStyle.container} ${themeStyle.border} ${themeStyle.text}`}>
-            <div className={`p-4 border-b ${themeStyle.border} flex justify-between items-center`}>
+            <div className={`p-4 border-b ${themeStyle.border} flex flex-wrap gap-4 justify-between items-center`}>
               <h3 className="font-semibold text-sm">Table of Contents</h3>
               <button onClick={() => setIsTOCOpen(false)} className={`p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/10 ${themeStyle.text}`}>
                 <X className="w-4 h-4" />

@@ -120,7 +120,7 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
             className="w-full p-2 rounded-lg bg-slate-950 border border-slate-700 text-xs text-slate-100 focus:outline-none focus:border-amber-500 resize-none font-sans"
           />
 
-          <div className="flex items-center justify-between pt-0.5">
+          <div className="flex flex-wrap gap-2 items-center justify-between pt-0.5">
             <span className="text-[10px] text-slate-500 font-mono">⌘+Enter to save</span>
             <div className="flex items-center gap-1.5">
               <button

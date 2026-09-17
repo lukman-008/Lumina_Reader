@@ -316,7 +316,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       {/* Top Banner / Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {/* Books Volume */}
-        <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 border border-slate-800 shadow-xl flex items-center justify-between">
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 border border-slate-800 shadow-xl flex flex-wrap gap-4 items-center justify-between">
           <div>
             <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
               Books in Library
@@ -332,7 +332,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         </div>
 
         {/* Word Volume */}
-        <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 border border-slate-800 shadow-xl flex items-center justify-between">
+        <div className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 border border-slate-800 shadow-xl flex flex-wrap gap-4 items-center justify-between">
           <div>
             <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
               Library Volume
@@ -352,7 +352,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         {/* Habits, Velocity & Streaks */}
         <div
           onClick={() => setIsHabitsModalOpen(true)}
-          className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 border border-slate-800 hover:border-amber-500/40 shadow-xl flex items-center justify-between cursor-pointer transition group"
+          className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 border border-slate-800 hover:border-amber-500/40 shadow-xl flex flex-wrap gap-4 items-center justify-between cursor-pointer transition group"
         >
           <div>
             <span className="text-xs font-medium text-amber-400 uppercase tracking-wider flex items-center gap-1">
@@ -371,7 +371,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         {/* Backup & Export */}
         <div
           onClick={() => setIsBackupModalOpen(true)}
-          className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 border border-slate-800 hover:border-sky-500/40 shadow-xl flex items-center justify-between cursor-pointer transition group"
+          className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 border border-slate-800 hover:border-sky-500/40 shadow-xl flex flex-wrap gap-4 items-center justify-between cursor-pointer transition group"
         >
           <div>
             <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
@@ -892,7 +892,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   </div>
 
                   {/* Card Actions */}
-                  <div className="flex items-center justify-between pt-1">
+                  <div className="flex flex-wrap gap-2 items-center justify-between pt-1">
                     <span className="text-[11px] text-amber-400 font-semibold group-hover:underline flex items-center gap-1">
                       <BookOpen className="w-3.5 h-3.5" />
                       <span>{progress > 0 ? 'Resume Reading' : 'Start Reading'}</span>
@@ -935,7 +935,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     onSelectBook(book);
                   }
                 }}
-                className={`group flex items-center justify-between p-3 rounded-2xl bg-slate-900 border transition cursor-pointer hover:border-slate-700 ${
+                className={`group flex flex-wrap gap-2 items-center justify-between p-3 rounded-2xl bg-slate-900 border transition cursor-pointer hover:border-slate-700 ${
                   isSelected
                     ? 'border-amber-500 ring-2 ring-amber-500/40 bg-slate-900/90'
                     : 'border-slate-800'
@@ -1080,7 +1080,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       {isNewShelfModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
           <div className="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 text-slate-100 flex flex-col space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex flex-wrap gap-2 items-center justify-between pb-2 border-b border-slate-800">
               <span className="text-sm font-semibold">Create Custom Shelf</span>
               <button
                 onClick={() => setIsNewShelfModalOpen(false)}
@@ -1120,7 +1120,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       {isBulkShelfModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
           <div className="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 text-slate-100 flex flex-col space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex flex-wrap gap-2 items-center justify-between pb-2 border-b border-slate-800">
               <span className="text-sm font-semibold">Assign to Shelf</span>
               <button
                 onClick={() => setIsBulkShelfModalOpen(false)}
@@ -1155,7 +1155,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       {isBulkTagModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
           <div className="w-full max-w-sm rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 text-slate-100 flex flex-col space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <div className="flex flex-wrap gap-2 items-center justify-between pb-2 border-b border-slate-800">
               <span className="text-sm font-semibold">Add Tag to Selected Books</span>
               <button
                 onClick={() => setIsBulkTagModalOpen(false)}

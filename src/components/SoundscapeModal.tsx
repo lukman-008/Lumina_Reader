@@ -123,7 +123,7 @@ export const SoundscapeModal: React.FC<SoundscapeModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4 animate-in fade-in duration-150" onClick={onClose}>
       <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl p-6 text-slate-100 flex flex-col space-y-6 max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div className="flex flex-wrap gap-2 items-center justify-between pb-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
               <CloudRain className="w-5 h-5" />
@@ -221,7 +221,7 @@ export const SoundscapeModal: React.FC<SoundscapeModalProps> = ({
 
         {/* Blue Light / Circadian Warmth Section */}
         <div className="pt-4 border-t border-slate-800 space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap gap-2 items-center justify-between">
             <div className="flex items-center gap-2">
               <Sun className="w-4 h-4 text-amber-400" />
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -250,7 +250,7 @@ export const SoundscapeModal: React.FC<SoundscapeModalProps> = ({
           </div>
 
           {/* Auto-Circadian Sunset Mode */}
-          <div className="flex items-center justify-between pt-2">
+          <div className="flex flex-wrap gap-2 items-center justify-between pt-2">
             <div className="flex items-center gap-2">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-xs text-slate-300">Auto-Circadian (Evening Warming)</span>

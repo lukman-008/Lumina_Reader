@@ -65,7 +65,7 @@ export const HighlightPopover: React.FC<HighlightPopoverProps> = ({
       className="fixed z-50 w-72 rounded-2xl bg-slate-900 border border-slate-700/90 shadow-2xl p-3 text-slate-100 flex flex-col space-y-2.5 animate-in fade-in zoom-in-95 duration-100 select-none text-xs"
     >
       {/* Header: Color Swatches & Quick Actions */}
-      <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+      <div className="flex flex-wrap gap-2 items-center justify-between pb-2 border-b border-slate-800">
         <div className="flex items-center gap-1.5">
           {COLORS.map((c) => (
             <button
@@ -145,7 +145,7 @@ export const HighlightPopover: React.FC<HighlightPopoverProps> = ({
               autoFocus
               className="w-full h-18 p-2 rounded-lg bg-slate-950 border border-slate-700 text-xs focus:outline-none focus:border-amber-500 text-slate-200 resize-none font-sans"
             />
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap gap-2 items-center justify-between">
               <span className="text-[10px] text-slate-500 font-mono">⌘+Enter</span>
               <div className="flex justify-end gap-1.5">
                 <button

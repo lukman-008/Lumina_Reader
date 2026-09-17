@@ -864,7 +864,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
           <img 
             src={imgMatch[2]} 
             alt={imgMatch[1]} 
-            className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-lg border border-slate-700/50 bg-slate-800/50 p-1"
+            className="max-w-full max-h-[60dvh] object-contain rounded-xl shadow-lg border border-slate-700/50 bg-slate-800/50 p-1"
           />
         </div>
       );
@@ -1246,7 +1246,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       {/* Spotlight Search in Book Modal */}
       {isSearchOpen && (
         <div className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-200" onClick={() => setIsSearchOpen(false)}>
-          <div className="w-full max-w-2xl rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.7)] text-slate-100 flex flex-col max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-2xl rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.7)] text-slate-100 flex flex-col max-h-[80dvh] overflow-hidden animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center px-4 py-3 border-b border-slate-800/80">
               <Search className="w-5 h-5 text-amber-500 shrink-0" />
               <input
@@ -1401,7 +1401,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
           ) : settings.layoutMode === 'scroll' ? (
             <div className="space-y-5 leading-relaxed">
               {currentChapter.content.split('\n\n').map((text, idx) => renderParagraphBlock({text, globalIndex: idx}, idx))}
-              <div className="mt-16 pt-8 border-t border-current/10 flex items-center justify-between">
+              <div className="mt-16 pt-8 border-t border-current/10 flex flex-wrap gap-4 items-center justify-between">
                 <button
                   onClick={() => {
                     if (currentChapterIndex > 0) {

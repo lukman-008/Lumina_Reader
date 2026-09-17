@@ -49,8 +49,8 @@ npx electron-builder --linux`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-      <div className="w-full max-w-2xl rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl p-6 text-slate-100 flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+      <div className="w-full max-w-2xl rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl p-6 text-slate-100 flex flex-col max-h-[90dvh]">
+        <div className="flex flex-wrap gap-2 items-center justify-between pb-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
               <Download className="w-5 h-5" />
@@ -148,7 +148,7 @@ npx electron-builder --linux`;
           {selectedTab === 'android' && (
             <div className="space-y-3">
               <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-wrap gap-2 items-center justify-between mb-2">
                   <h4 className="font-semibold text-slate-200 text-sm">Packaging Android APK via Capacitor</h4>
                   <button
                     onClick={() => copyCode('npm run android:sync')}
@@ -173,7 +173,7 @@ npx electron-builder --linux`;
           {selectedTab === 'tauri' && (
             <div className="space-y-3">
               <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-wrap gap-2 items-center justify-between mb-2">
                   <h4 className="font-semibold text-slate-200 text-sm">Packaging via Tauri (Recommended)</h4>
                   <button
                     onClick={() => copyCode(tauriCommands)}
@@ -196,7 +196,7 @@ npx electron-builder --linux`;
           {selectedTab === 'electron' && (
             <div className="space-y-3">
               <div className="p-3.5 rounded-xl bg-slate-800/60 border border-slate-700/60">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex flex-wrap gap-2 items-center justify-between mb-2">
                   <h4 className="font-semibold text-slate-200 text-sm">Packaging via Electron Builder</h4>
                   <button
                     onClick={() => copyCode(electronCommands)}

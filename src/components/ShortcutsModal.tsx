@@ -35,8 +35,8 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-      <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl p-6 text-slate-100 flex flex-col max-h-[85vh]">
-        <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+      <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl p-6 text-slate-100 flex flex-col max-h-[85dvh]">
+        <div className="flex flex-wrap gap-2 items-center justify-between pb-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
               <Keyboard className="w-5 h-5" />
@@ -58,7 +58,7 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
           </button>
         </div>
 
-        <div className="overflow-y-auto py-4 space-y-2.5 pr-1">
+        <div className="overflow-y-auto flex-1 py-4 space-y-2.5 pr-1">
           {shortcuts.map((item, idx) => (
             <div
               key={idx}

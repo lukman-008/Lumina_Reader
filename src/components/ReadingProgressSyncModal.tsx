@@ -128,7 +128,7 @@ export const ReadingProgressSyncModal: React.FC<ReadingProgressSyncModalProps> =
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150">
-      <div className="w-full max-w-xl max-h-[85vh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100">
+      <div className="w-full max-w-xl max-h-[85dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100">
         {/* Header */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">
@@ -204,7 +204,7 @@ export const ReadingProgressSyncModal: React.FC<ReadingProgressSyncModalProps> =
           {activeTab === 'export' ? (
             <div className="space-y-4">
               <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap gap-2 items-center justify-between">
                   <span className="font-semibold text-slate-200 text-xs">
                     Your Portable Sync Passkey
                   </span>
@@ -270,7 +270,7 @@ export const ReadingProgressSyncModal: React.FC<ReadingProgressSyncModalProps> =
                   className="w-full p-2.5 rounded-lg bg-slate-900 border border-slate-700 font-mono text-[11px] text-slate-200 resize-none focus:outline-none focus:border-sky-500"
                 />
 
-                <div className="flex items-center justify-between pt-1">
+                <div className="flex flex-wrap gap-2 items-center justify-between pt-1">
                   <label className="text-[11px] text-slate-400 hover:text-slate-200 cursor-pointer flex items-center gap-1.5">
                     <Upload className="w-3 h-3 text-sky-400" />
                     <span>Upload sync JSON file</span>

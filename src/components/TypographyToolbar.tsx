@@ -63,7 +63,7 @@ export const TypographyToolbar: React.FC<TypographyToolbarProps> = ({
   return (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
-      <div className="absolute right-4 top-14 w-84 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4 text-slate-200 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-4 select-none max-h-[85vh] overflow-y-auto">
+      <div className="absolute right-4 top-14 w-84 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl p-4 text-slate-200 z-50 animate-in fade-in zoom-in-95 duration-150 space-y-4 select-none max-h-[85dvh] overflow-y-auto">
       {/* Smart Themes */}
       <div>
         <div className="flex items-center justify-between text-xs font-semibold text-slate-400 mb-2">

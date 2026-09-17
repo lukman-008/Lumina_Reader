@@ -92,7 +92,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-150">
       <div className="w-full max-w-lg rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl p-6 text-slate-100 flex flex-col space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="flex flex-wrap gap-2 items-center justify-between pb-3 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
               <Database className="w-5 h-5" />
@@ -129,7 +129,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
 
         {/* Export Section */}
         <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/70 space-y-2.5">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap gap-2 items-center justify-between">
             <div className="flex items-center gap-2">
               <Download className="w-4 h-4 text-amber-400" />
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-200">
@@ -177,7 +177,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
             </label>
           ) : (
             <div className="space-y-3 bg-slate-900/80 p-3.5 rounded-2xl border border-slate-700">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap gap-2 items-center justify-between">
                 <span className="text-xs font-semibold text-amber-400">
                   Backup Archive Detected
                 </span>
