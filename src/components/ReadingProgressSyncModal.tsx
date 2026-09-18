@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { progressSyncService, type SyncInfo } from '../services/progressSyncService';
 import type { ReadingProgressSyncPayload } from '../types';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface ReadingProgressSyncModalProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export const ReadingProgressSyncModal: React.FC<ReadingProgressSyncModalProps> =
   onClose,
   onSyncCompleted,
 }) => {
+  useEscapeKey(isOpen, onClose);
   const [activeTab, setActiveTab] = useState<'export' | 'import'>('export');
   const [syncCode, setSyncCode] = useState<string>('');
   const [copied, setCopied] = useState(false);
@@ -127,8 +129,14 @@ export const ReadingProgressSyncModal: React.FC<ReadingProgressSyncModalProps> =
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150">
-      <div className="w-full max-w-xl max-h-[85dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150 cursor-pointer"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-xl max-h-[85dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100 cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">

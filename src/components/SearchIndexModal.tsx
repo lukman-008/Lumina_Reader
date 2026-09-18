@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { Book, SearchIndexResult } from '../types';
 import { searchIndex } from '../services/searchIndexService';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface SearchIndexModalProps {
   isOpen: boolean;
@@ -26,6 +27,7 @@ export const SearchIndexModal: React.FC<SearchIndexModalProps> = ({
   currentBook,
   onNavigateToResult,
 }) => {
+  useEscapeKey(isOpen, onClose);
   const [query, setQuery] = useState('');
   const [searchScope, setSearchScope] = useState<'current' | 'all'>(
     currentBook ? 'current' : 'all'
@@ -78,8 +80,14 @@ export const SearchIndexModal: React.FC<SearchIndexModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150">
-      <div className="w-full max-w-2xl max-h-[85dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150 cursor-pointer"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-2xl max-h-[85dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100 cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header & Search Bar */}
         <div className="p-4 border-b border-slate-800 space-y-3 shrink-0">
           <div className="flex flex-wrap gap-2 items-center justify-between">

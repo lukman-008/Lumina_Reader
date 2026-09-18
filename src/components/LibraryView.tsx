@@ -351,6 +351,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
         {/* Habits, Velocity & Streaks */}
         <div
+          id="habits-dashboard-trigger"
           onClick={() => setIsHabitsModalOpen(true)}
           className="p-5 rounded-2xl bg-gradient-to-br from-slate-900 via-slate-900 to-slate-850 border border-slate-800 hover:border-amber-500/40 shadow-xl flex flex-wrap gap-4 items-center justify-between cursor-pointer transition group"
         >
@@ -590,26 +591,26 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       </div>
 
       {/* Layout Toolbar: View Mode & Sort Dropdown */}
-      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400 pt-1">
-        <div className="flex items-center gap-2">
-          <span>
+      <div className="w-full flex flex-wrap items-center justify-between gap-y-2 gap-x-3 text-xs text-slate-400 pt-1">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="whitespace-nowrap">
             Showing <strong className="text-slate-200">{sortedBooks.length}</strong> books
           </span>
           {activeTab !== 'all' && (
-            <span className="px-2 py-0.5 rounded-md bg-slate-800 text-[11px] text-amber-400 font-medium">
+            <span className="shrink-0 px-2 py-0.5 rounded-md bg-slate-800 text-[11px] text-amber-400 font-medium">
               Filtered
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center flex-wrap gap-2.5 sm:gap-3 shrink-0 ml-auto">
           {/* Sort selector */}
-          <div className="flex items-center gap-1.5">
-            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500" />
+          <div className="flex items-center gap-1.5 shrink-0">
+            <ArrowUpDown className="w-3.5 h-3.5 text-slate-500 shrink-0" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-slate-200 text-xs focus:outline-none cursor-pointer"
+              className="bg-slate-900 border border-slate-800 rounded-lg px-2 py-1 text-slate-200 text-xs focus:outline-none cursor-pointer max-w-[135px] sm:max-w-none"
             >
               <option value="recent">Recently Read</option>
               <option value="title">Title (A-Z)</option>
@@ -620,7 +621,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
           </div>
 
           {/* Grid vs List View Mode Switcher */}
-          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5">
+          <div className="flex items-center bg-slate-900 border border-slate-800 rounded-lg p-0.5 shrink-0">
             <button
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded-md transition cursor-pointer ${
@@ -629,6 +630,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   : 'text-slate-400 hover:text-white'
               }`}
               title="Grid View"
+              aria-label="Grid View"
             >
               <LayoutGrid className="w-3.5 h-3.5" />
             </button>
@@ -640,6 +642,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   : 'text-slate-400 hover:text-white'
               }`}
               title="Compact List View"
+              aria-label="Compact List View"
             >
               <ListIcon className="w-3.5 h-3.5" />
             </button>
@@ -752,8 +755,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
             <p className="max-w-xs mx-auto">No books found in this shelf or search filter. Import some files to start reading.</p>
           </div>
           <button
-            onClick={() => setIsImporterOpen(true)}
-            className="px-5 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 active:scale-95 text-amber-400 font-semibold border border-amber-500/20 flex items-center gap-2 transition"
+            onClick={() => {
+              if (onOpenFileImporter) {
+                onOpenFileImporter();
+              } else {
+                fileInputRef.current?.click();
+              }
+            }}
+            className="px-5 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 active:scale-95 text-amber-400 font-semibold border border-amber-500/20 flex items-center gap-2 transition cursor-pointer"
           >
             <Upload className="w-4 h-4" />
             <span>Import Books</span>

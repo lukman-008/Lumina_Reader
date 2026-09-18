@@ -18,6 +18,7 @@ import {
 import { habitTracker } from '../services/habitTracker';
 import type { HabitStats, ReadingSession } from '../types';
 import { db } from '../services/db';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface ReadingHabitsDashboardProps {
   isOpen: boolean;
@@ -28,6 +29,7 @@ export const ReadingHabitsDashboard: React.FC<ReadingHabitsDashboardProps> = ({
   isOpen,
   onClose,
 }) => {
+  useEscapeKey(isOpen, onClose);
   const [stats, setStats] = useState<HabitStats | null>(null);
   const [recentSessions, setRecentSessions] = useState<ReadingSession[]>([]);
   const [dailyGoal, setDailyGoal] = useState<number>(30);
@@ -55,7 +57,18 @@ export const ReadingHabitsDashboard: React.FC<ReadingHabitsDashboardProps> = ({
     return () => unsubTimer();
   }, [isOpen, dailyGoal]);
 
-  if (!isOpen || !stats) return null;
+  if (!isOpen) return null;
+
+  if (!stats) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 animate-in fade-in duration-150" onClick={onClose}>
+        <div className="w-full max-w-2xl rounded-3xl bg-slate-900 border border-slate-700 shadow-2xl p-12 text-slate-100 flex flex-col items-center justify-center space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="w-7 h-7 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs text-slate-400">Loading reading habits & analytics...</p>
+        </div>
+      </div>
+    );
+  }
 
   const formatTimerTime = (sec: number | null) => {
     if (sec === null) return `${selectedTimerMins}:00`;

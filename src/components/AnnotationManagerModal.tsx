@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { Book, Highlight, Bookmark } from '../types';
 import { db } from '../services/db';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface AnnotationManagerModalProps {
   isOpen: boolean;
@@ -45,6 +46,7 @@ export const AnnotationManagerModal: React.FC<AnnotationManagerModalProps> = ({
   onNavigateToHighlight,
   onRefreshData,
 }) => {
+  useEscapeKey(isOpen, onClose);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [selectedBookId, setSelectedBookId] = useState<string>(currentBook ? currentBook.id : 'all');
@@ -223,8 +225,14 @@ export const AnnotationManagerModal: React.FC<AnnotationManagerModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150">
-      <div className="w-full max-w-4xl max-h-[88dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150 cursor-pointer"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-4xl max-h-[88dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100 cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5">

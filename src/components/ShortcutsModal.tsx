@@ -1,5 +1,6 @@
 import React from 'react';
 import { usePlatform } from '../hooks/usePlatform';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 import { X, Keyboard, Laptop } from 'lucide-react';
 
 interface ShortcutsModalProps {
@@ -8,6 +9,7 @@ interface ShortcutsModalProps {
 }
 
 export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose }) => {
+  useEscapeKey(isOpen, onClose);
   const { modKey, altKey, fullscreenShortcut, platform } = usePlatform();
 
   if (!isOpen) return null;
@@ -34,8 +36,14 @@ export const ShortcutsModal: React.FC<ShortcutsModalProps> = ({ isOpen, onClose 
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-      <div className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl p-6 text-slate-100 flex flex-col max-h-[85dvh]">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150 cursor-pointer"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl p-6 text-slate-100 flex flex-col max-h-[85dvh] cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex flex-wrap gap-2 items-center justify-between pb-4 border-b border-slate-800">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">

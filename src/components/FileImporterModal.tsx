@@ -17,6 +17,7 @@ import {
 import type { Book, Shelf, ImportQueueItem } from '../types';
 import { parseUploadedBook, countWords } from '../services/bookParser';
 import { db } from '../services/db';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface FileImporterModalProps {
   isOpen: boolean;
@@ -45,16 +46,6 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
   const [pasteAuthor, setPasteAuthor] = useState('');
   const [pasteContent, setPasteContent] = useState('');
 
-  // Handle passed-in initial files
-  useEffect(() => {
-    if (isOpen && initialFiles && initialFiles.length > 0) {
-      handleFileSelect(initialFiles);
-    }
-  }, [isOpen, initialFiles]);
-
-  if (!isOpen) return null;
-
-
   const handleClose = () => {
     setQueue([]);
     setPasteTitle('');
@@ -63,6 +54,17 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
     setActiveTab('upload');
     onClose();
   };
+
+  useEscapeKey(isOpen, handleClose);
+
+  // Handle passed-in initial files
+  useEffect(() => {
+    if (isOpen && initialFiles && initialFiles.length > 0) {
+      handleFileSelect(initialFiles);
+    }
+  }, [isOpen, initialFiles]);
+
+  if (!isOpen) return null;
 
   const handleFileSelect = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -189,8 +191,14 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
   const successfulCount = queue.filter((i) => i.status === 'success').length;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150">
-      <div className="w-full max-w-2xl max-h-[90dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-5 animate-in fade-in duration-150 cursor-pointer"
+      onClick={handleClose}
+    >
+      <div
+        className="w-full max-w-2xl max-h-[90dvh] bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-100 cursor-default"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2">

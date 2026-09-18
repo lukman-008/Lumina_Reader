@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { ambientAudio } from '../services/ambientAudio';
 import type { SoundscapeType, ReaderSettings } from '../types';
+import { useEscapeKey } from '../hooks/useEscapeKey';
 
 interface SoundscapeModalProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export const SoundscapeModal: React.FC<SoundscapeModalProps> = ({
   settings,
   onUpdateSettings,
 }) => {
+  useEscapeKey(isOpen, onClose);
   const [activeSoundscape, setActiveSoundscape] = useState<SoundscapeType>(
     ambientAudio.getCurrentSoundscape()
   );
