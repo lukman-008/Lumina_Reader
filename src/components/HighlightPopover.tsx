@@ -58,6 +58,8 @@ export const HighlightPopover: React.FC<HighlightPopoverProps> = ({
       onClick={(e) => e.stopPropagation()}
       onMouseUp={(e) => e.stopPropagation()}
       onMouseDown={(e) => { if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return; e.preventDefault(); }}
+      onTouchStart={(e) => e.stopPropagation()}
+      onTouchEnd={(e) => e.stopPropagation()}
       style={{
         left: `${Math.max(10, Math.min(position.x - 140, window.innerWidth - 320))}px`,
         top: `${Math.max(10, Math.min(position.y - 10, window.innerHeight - 300))}px`,

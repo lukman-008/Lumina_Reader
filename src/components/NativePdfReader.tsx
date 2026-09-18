@@ -72,6 +72,29 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const touchStartY = useRef<number | null>(null);
 
   const handleSwipeStart = (e: React.TouchEvent) => {
+    // Never trigger page-turn swipes if touch started on navigation bar, toolbars, buttons, sliders, or drawers
+    const target = e.target as HTMLElement | null;
+    if (target) {
+      if (
+        target.closest('nav') ||
+        target.closest('header') ||
+        target.closest('footer') ||
+        target.closest('button') ||
+        target.closest('input') ||
+        target.closest('select') ||
+        target.closest('textarea') ||
+        target.closest('[role="slider"]') ||
+        target.closest('[data-no-swipe="true"]') ||
+        target.closest('.no-swipe') ||
+        target.closest('.scrollbar-hide') ||
+        target.closest('[role="dialog"]')
+      ) {
+        touchStartX.current = null;
+        touchStartY.current = null;
+        return;
+      }
+    }
+
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
   };
@@ -83,6 +106,14 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     
     const deltaX = touchEndX - touchStartX.current;
     const deltaY = touchEndY - touchStartY.current;
+
+    // If text is actively selected or user was selecting text, do not navigate pages
+    const currentSelection = window.getSelection();
+    if (currentSelection && currentSelection.toString().trim().length > 0) {
+      touchStartX.current = null;
+      touchStartY.current = null;
+      return;
+    }
 
     // Only register as swipe if horizontal distance is greater than vertical (allows scrolling)
     // and distance is significant
@@ -193,7 +224,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const [isTypographyOpen, setIsTypographyOpen] = useState(false);
 
   // Selection popup states
-  const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
+  const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number; bottom?: number } | null>(null);
   const [selectedText, setSelectedText] = useState('');
   const [selectionRects, setSelectionRects] = useState<{ left: number; top: number; width: number; height: number }[]>([]);
   const [selectionOffsets, setSelectionOffsets] = useState<any>(null);
@@ -466,49 +497,65 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
 
   // Selection detection
   useEffect(() => {
-    const handleMouseUp = () => {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const checkSelection = () => {
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed) {
         const text = selection.toString().trim();
         if (text) {
-          const range = selection.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          
-          let normalizedRects: { left: number; top: number; width: number; height: number }[] = [];
-          const pageContainer = (selection.anchorNode as Node)?.parentElement?.closest('.react-pdf__Page');
-          if (pageContainer) {
-             const pageRect = pageContainer.getBoundingClientRect();
-             const rects = Array.from(range.getClientRects());
-             normalizedRects = rects.map(r => ({
-               left: ((r.left - pageRect.left) / pageRect.width) * 100,
-               top: ((r.top - pageRect.top) / pageRect.height) * 100,
-               width: (r.width / pageRect.width) * 100,
-               height: (r.height / pageRect.height) * 100,
-             }));
-          }
+          try {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            
+            let normalizedRects: { left: number; top: number; width: number; height: number }[] = [];
+            const pageContainer = (selection.anchorNode as Node)?.parentElement?.closest('.react-pdf__Page');
+            if (pageContainer) {
+               const pageRect = pageContainer.getBoundingClientRect();
+               const rects = Array.from(range.getClientRects());
+               normalizedRects = rects.map(r => ({
+                 left: ((r.left - pageRect.left) / pageRect.width) * 100,
+                 top: ((r.top - pageRect.top) / pageRect.height) * 100,
+                 width: (r.width / pageRect.width) * 100,
+                 height: (r.height / pageRect.height) * 100,
+               }));
+            }
 
-          setSelectedText(text);
-          setSelectionRects(normalizedRects);
-          setSelectionPosition({
-            x: rect.left + rect.width / 2,
-            y: rect.top - 10,
-          });
+            setSelectedText(text);
+            setSelectionRects(normalizedRects);
+            setSelectionPosition({
+              x: rect.left + rect.width / 2,
+              y: rect.top,
+              bottom: rect.bottom,
+            });
+          } catch {
+            // Ignore range errors during mid-drag
+          }
         }
       } else {
         setSelectionPosition(null);
         setSelectionRects([]);
       }
     };
-    
-    const handleTouchEnd = () => {
-      setTimeout(handleMouseUp, 100);
+
+    const handleSelectionEnd = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(checkSelection, 80);
     };
 
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('touchend', handleTouchEnd);
+    const handleSelectionChange = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(checkSelection, 180);
+    };
+
+    document.addEventListener('mouseup', handleSelectionEnd);
+    document.addEventListener('touchend', handleSelectionEnd);
+    document.addEventListener('selectionchange', handleSelectionChange);
     return () => {
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('touchend', handleTouchEnd);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      document.removeEventListener('mouseup', handleSelectionEnd);
+      document.removeEventListener('touchend', handleSelectionEnd);
+      document.removeEventListener('selectionchange', handleSelectionChange);
     };
   }, []);
 
@@ -518,6 +565,12 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
       const target = e.target as HTMLElement;
       if (!target.closest('.fixed.z-50') && !target.closest('.pointer-events-auto.mix-blend-multiply')) {
         setActiveHighlightPopover(null);
+        setTimeout(() => {
+          const selection = window.getSelection();
+          if (!selection || selection.toString().trim().length === 0) {
+            setSelectionPosition(null);
+          }
+        }, 120);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -590,9 +643,15 @@ return (
 
       {/* Top Nav Bar */}
       <div 
+        data-no-swipe="true"
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
         className={`${isZenMode ? 'fixed top-0 left-0 right-0 z-50 transition-all duration-300' : 'relative z-30 shrink-0'} ${isZenMode && !zenNavVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
       >
         <nav
+          data-no-swipe="true"
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
           className={`h-12 border-b ${themeStyle.border} px-2 sm:px-4 flex items-center gap-2 select-none backdrop-blur-xs w-full overflow-hidden ${isZenMode ? themeStyle.bg : ''}`}
         >
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">

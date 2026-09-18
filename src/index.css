@@ -60,6 +60,14 @@ body {
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  -webkit-touch-callout: default !important;
+}
+
+.reading-content * {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* Smooth page transitions */

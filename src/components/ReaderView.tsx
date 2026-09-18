@@ -167,7 +167,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
 
   // Selection popup state
-  const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number } | null>(null);
+  const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number; bottom?: number } | null>(null);
   const [selectionOffsets, setSelectionOffsets] = useState<{startOffset: number, endOffset: number, startItemIndex: number} | null>(null);
   const [selectedText, setSelectedText] = useState('');
 
@@ -187,6 +187,30 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   const touchStartY = useRef<number | null>(null);
 
   const handleSwipeStart = (e: React.TouchEvent) => {
+    // Never trigger page-turn swipes if touch started on navigation bar, toolbars, buttons, sliders, or drawers
+    const target = e.target as HTMLElement | null;
+    if (target) {
+      if (
+        target.closest('nav') ||
+        target.closest('header') ||
+        target.closest('footer') ||
+        target.closest('button') ||
+        target.closest('input') ||
+        target.closest('select') ||
+        target.closest('textarea') ||
+        target.closest('[role="slider"]') ||
+        target.closest('[data-no-swipe="true"]') ||
+        target.closest('.no-swipe') ||
+        target.closest('.scrollbar-hide') ||
+        target.closest('[role="dialog"]') ||
+        target.closest('.reading-progress-bar')
+      ) {
+        touchStartX.current = null;
+        touchStartY.current = null;
+        return;
+      }
+    }
+
     touchStartX.current = e.touches[0].clientX;
     touchStartY.current = e.touches[0].clientY;
   };
@@ -198,6 +222,14 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     
     const deltaX = touchEndX - touchStartX.current;
     const deltaY = touchEndY - touchStartY.current;
+
+    // If text is actively selected or user was selecting text, do not navigate pages
+    const currentSelection = window.getSelection();
+    if (currentSelection && currentSelection.toString().trim().length > 0) {
+      touchStartX.current = null;
+      touchStartY.current = null;
+      return;
+    }
 
     // Only register as swipe if horizontal distance is greater than vertical (allows vertical scroll to work)
     // and distance is significant (at least 40px)
@@ -518,14 +550,14 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     setRulerY(e.clientY);
   };
 
-  // Listen for text selection completion (mouseup/touchend) instead of selectionchange 
-  // to avoid re-rendering the DOM while the user is actively dragging, which destroys the selection.
+  // Listen for text selection completion (mouseup/touchend/selectionchange)
   useEffect(() => {
-    const handleSelectionEnd = () => {
-      // Small timeout to allow the browser to settle the selection
-      setTimeout(() => {
-        const selection = window.getSelection();
-        if (selection && selection.toString().trim().length > 0) {
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const checkSelection = () => {
+      const selection = window.getSelection();
+      if (selection && selection.toString().trim().length > 0) {
+        try {
           const range = selection.getRangeAt(0);
           const rect = range.getBoundingClientRect();
           
@@ -533,7 +565,6 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
           if (container && !container.contains(range.commonAncestorContainer)) {
             return;
           }
-
           
           let sOffset = -1;
           let eOffset = -1;
@@ -556,14 +587,29 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
           setSelectedText(selection.toString().trim());
           setSelectionPosition({
             x: rect.left + rect.width / 2,
-            y: rect.top - 10,
+            y: rect.top,
+            bottom: rect.bottom,
           });
+        } catch {
+          // Ignore range errors during mid-drag DOM mutation
         }
-      }, 50);
+      }
+    };
+
+    const handleSelectionEnd = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(checkSelection, 80);
+    };
+
+    const handleSelectionChange = () => {
+      // Debounce slightly longer for mobile handle dragging
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(checkSelection, 180);
     };
     
     document.addEventListener('mouseup', handleSelectionEnd);
     document.addEventListener('touchend', handleSelectionEnd);
+    document.addEventListener('selectionchange', handleSelectionChange);
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.shiftKey && e.key.includes('Arrow')) {
         handleSelectionEnd();
@@ -573,12 +619,13 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     document.addEventListener('keyup', handleKeyUp);
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       document.removeEventListener('mouseup', handleSelectionEnd);
       document.removeEventListener('touchend', handleSelectionEnd);
+      document.removeEventListener('selectionchange', handleSelectionChange);
       document.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
-
 
   // Close popup if clicking outside
   useEffect(() => {
@@ -594,7 +641,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
           if (!selection || selection.toString().trim().length === 0) {
             setSelectionPosition(null);
           }
-        }, 100);
+        }, 120);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -951,9 +998,15 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
 
       {/* Reader Navigation & Controls Bar (Auto-hidden in Zen Mode, revealed on top hover) */}
       <div 
+        data-no-swipe="true"
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => e.stopPropagation()}
         className={`${isZenMode ? 'fixed top-0 left-0 right-0 z-50 transition-all duration-300' : 'relative z-20 shrink-0'} ${isZenMode && !zenNavVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
       >
         <nav
+          data-no-swipe="true"
+          onTouchStart={(e) => e.stopPropagation()}
+          onTouchEnd={(e) => e.stopPropagation()}
           className={`h-12 border-b ${themeStyle.border} px-2 sm:px-4 flex items-center gap-2 select-none backdrop-blur-xs w-full overflow-hidden ${isZenMode ? themeStyle.bg : ''}`}
           aria-label="Reading Controls"
         >
@@ -1335,10 +1388,10 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
           </div>
         )}
 
-        {/* Click zones for desktop page turning */}
+        {/* Click zones for desktop page turning (hidden on mobile to prevent blocking touch text selection) */}
         <div
           onClick={handlePrevPage}
-          className="absolute left-0 top-0 bottom-0 w-16 md:w-28 z-10 cursor-w-resize hover:bg-black/[0.015] dark:hover:bg-white/[0.015] transition flex items-center justify-start pl-3 opacity-0 hover:opacity-100"
+          className="hidden md:flex absolute left-0 top-0 bottom-0 w-24 lg:w-28 z-10 cursor-w-resize hover:bg-black/[0.015] dark:hover:bg-white/[0.015] transition items-center justify-start pl-3 opacity-0 hover:opacity-100"
           title="Previous Page (← / Space)"
         >
           <div className="p-2 rounded-full bg-black/10 dark:bg-white/10 backdrop-blur-xs">
@@ -1348,7 +1401,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
 
         <div
           onClick={handleNextPage}
-          className="absolute right-0 top-0 bottom-0 w-16 md:w-28 z-10 cursor-e-resize hover:bg-black/[0.015] dark:hover:bg-white/[0.015] transition flex items-center justify-end pr-3 opacity-0 hover:opacity-100"
+          className="hidden md:flex absolute right-0 top-0 bottom-0 w-24 lg:w-28 z-10 cursor-e-resize hover:bg-black/[0.015] dark:hover:bg-white/[0.015] transition items-center justify-end pr-3 opacity-0 hover:opacity-100"
           title="Next Page (→ / Space)"
         >
           <div className="p-2 rounded-full bg-black/10 dark:bg-white/10 backdrop-blur-xs">
