@@ -14,12 +14,14 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build:client": "vite build",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "electron:dev": "electron .",
     "package:desktop": "vite build && electron-builder",
-    "android:sync": "npm run build && npx cap sync android"
+    "android:sync": "npm run build:client && npx cap sync android",
+    "android:open": "npx cap open android"
   },
   "build": {
     "appId": "com.luminareader.app",

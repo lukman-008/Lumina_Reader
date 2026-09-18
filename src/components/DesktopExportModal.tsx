@@ -28,6 +28,15 @@ npm run build
 # Linux produces: .deb & .AppImage
 npx tauri build`;
 
+  const androidCommands = `# 1. Install all dependencies (required first-time on your PC)
+npm install
+
+# 2. Build the app and sync to the native Android directory
+npm run android:sync
+
+# 3. Launch Android Studio directly to build your APK
+npm run android:open`;
+
   const electronCommands = `# 1. Install all dependencies (including electron & electron-builder)
 npm install
 
@@ -159,7 +168,7 @@ npx electron-builder --linux`;
                 <div className="flex flex-wrap gap-2 items-center justify-between mb-2">
                   <h4 className="font-semibold text-slate-200 text-sm">Packaging Android APK via Capacitor</h4>
                   <button
-                    onClick={() => copyCode('npm run android:sync')}
+                    onClick={() => copyCode(androidCommands)}
                     className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 transition"
                   >
                     {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -167,13 +176,13 @@ npx electron-builder --linux`;
                   </button>
                 </div>
                 <p className="text-xs text-slate-400 mb-2">
-                  We have added Capacitor to the project. To generate an APK or AAB, run this command to sync the web build with the Android project:
+                  Capacitor bridges the web application with Android. Run these steps on your PC:
                 </p>
                 <pre className="p-3 rounded-lg bg-slate-950 font-mono text-xs text-amber-300 overflow-x-auto border border-slate-800">
-                  npm run android:sync
+                  {androidCommands}
                 </pre>
                 <p className="text-xs text-slate-400 mt-3">
-                  After syncing, open the <code>android/</code> folder in <strong>Android Studio</strong>. From there, you can click <strong>Build &gt; Build Bundle(s) / APK(s) &gt; Build APK(s)</strong>.
+                  In <strong>Android Studio</strong>, click <strong>Build &gt; Build Bundle(s) / APK(s) &gt; Build APK(s)</strong> to output your release/debug <code>.apk</code>.
                 </p>
               </div>
             </div>
