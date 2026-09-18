@@ -133,6 +133,7 @@ export const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
     <footer
       data-no-swipe="true"
       onTouchStart={(e) => e.stopPropagation()}
+      onTouchMove={(e) => e.stopPropagation()}
       onTouchEnd={(e) => e.stopPropagation()}
       className="safe-pb border-t border-current/10 z-30 shrink-0 select-none backdrop-blur-xs relative reading-progress-bar"
       aria-label="Reading Navigation & Progress"

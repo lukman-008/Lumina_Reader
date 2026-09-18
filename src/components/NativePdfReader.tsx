@@ -506,7 +506,13 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
         if (text) {
           try {
             const range = selection.getRangeAt(0);
-            const rect = range.getBoundingClientRect();
+            let rect = range.getBoundingClientRect();
+            if (rect.width === 0 && rect.height === 0) {
+              const clientRects = range.getClientRects();
+              if (clientRects.length > 0) {
+                rect = clientRects[0];
+              }
+            }
             
             let normalizedRects: { left: number; top: number; width: number; height: number }[] = [];
             const pageContainer = (selection.anchorNode as Node)?.parentElement?.closest('.react-pdf__Page');
@@ -540,21 +546,23 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
 
     const handleSelectionEnd = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(checkSelection, 80);
+      debounceTimer = setTimeout(checkSelection, 30);
     };
 
     const handleSelectionChange = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(checkSelection, 180);
+      debounceTimer = setTimeout(checkSelection, 50);
     };
 
     document.addEventListener('mouseup', handleSelectionEnd);
     document.addEventListener('touchend', handleSelectionEnd);
+    document.addEventListener('pointerup', handleSelectionEnd);
     document.addEventListener('selectionchange', handleSelectionChange);
     return () => {
       if (debounceTimer) clearTimeout(debounceTimer);
       document.removeEventListener('mouseup', handleSelectionEnd);
       document.removeEventListener('touchend', handleSelectionEnd);
+      document.removeEventListener('pointerup', handleSelectionEnd);
       document.removeEventListener('selectionchange', handleSelectionChange);
     };
   }, []);
@@ -645,12 +653,14 @@ return (
       <div 
         data-no-swipe="true"
         onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
         className={`${isZenMode ? 'fixed top-0 left-0 right-0 z-50 transition-all duration-300' : 'relative z-30 shrink-0'} ${isZenMode && !zenNavVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
       >
         <nav
           data-no-swipe="true"
           onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
           className={`h-12 border-b ${themeStyle.border} px-2 sm:px-4 flex items-center gap-2 select-none backdrop-blur-xs w-full overflow-hidden ${isZenMode ? themeStyle.bg : ''}`}
         >
@@ -695,7 +705,16 @@ return (
             </button>
           </div>
 
-          <div className="flex-1 min-w-0 h-full flex items-center justify-end"><div className="flex items-center overflow-x-auto scrollbar-hide w-full h-full mask-fade-right"><div className="ml-auto flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0 pr-2 [&>button]:shrink-0">
+          <div className="flex-1 min-w-0 h-full flex items-center justify-end">
+            <div 
+              data-no-swipe="true"
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+              style={{ touchAction: 'pan-x', overscrollBehavior: 'contain' }}
+              className="flex items-center overflow-x-auto scrollbar-hide w-full h-full mask-fade-right touch-pan-x overscroll-contain"
+            >
+              <div className="ml-auto flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0 pr-2 [&>button]:shrink-0">
             <button
               onClick={() => setIsTypographyOpen((prev) => !prev)}
               className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer ${isTypographyOpen ? 'text-amber-500 bg-amber-500/10' : themeStyle.text}`}

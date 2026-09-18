@@ -79,20 +79,23 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
 
   // Mobile-aware adaptive layout dimensions
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-  const popupWidth = isAddingNote ? Math.min(340, typeof window !== 'undefined' ? window.innerWidth - 24 : 320) : (isMobile ? 320 : 350);
-  const popupHeight = isAddingNote ? 160 : 46;
-
-  // On desktop: If selection is near top of screen, flip below so it doesn't collide with top bar
-  const showBelow = (position.y - popupHeight) < 68;
-  const calculatedTop = showBelow
-    ? (position.bottom ? position.bottom + 10 : position.y + 36)
-    : (position.y - popupHeight - 8);
-
   const windowW = typeof window !== 'undefined' ? window.innerWidth : 360;
   const windowH = typeof window !== 'undefined' ? window.innerHeight : 640;
 
-  const safeLeft = Math.max(8, Math.min(position.x - popupWidth / 2, windowW - popupWidth - 8));
-  const safeTop = Math.max(54, Math.min(calculatedTop, windowH - popupHeight - 24));
+  const popupWidth = isAddingNote 
+    ? Math.min(340, windowW - 24) 
+    : Math.min(330, windowW - 24);
+  const popupHeight = isAddingNote ? 160 : 46;
+
+  // If selection is near top of screen, flip below so it doesn't collide with top bar
+  const showBelow = (position.y - popupHeight) < 68;
+  const calculatedTop = showBelow
+    ? (position.bottom ? position.bottom + 10 : position.y + 36)
+    : (position.y - popupHeight - 10);
+
+  // Safely clamp within visible viewport, keeping clear of top header (54px) and bottom progress bar (64px)
+  const safeLeft = Math.max(12, Math.min(position.x - popupWidth / 2, windowW - popupWidth - 12));
+  const safeTop = Math.max(54, Math.min(calculatedTop, windowH - popupHeight - 68));
 
   return (
     <div
@@ -108,21 +111,12 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
       onTouchEnd={(e) => {
         e.stopPropagation();
       }}
-      style={
-        isMobile
-          ? {
-              bottom: '18px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: isAddingNote ? `${popupWidth}px` : 'max-content',
-              maxWidth: 'calc(100vw - 20px)',
-            }
-          : {
-              left: `${safeLeft}px`,
-              top: `${safeTop}px`,
-              width: isAddingNote ? `${popupWidth}px` : undefined,
-            }
-      }
+      style={{
+        left: `${safeLeft}px`,
+        top: `${safeTop}px`,
+        width: isAddingNote ? `${popupWidth}px` : undefined,
+        maxWidth: 'calc(100vw - 24px)',
+      }}
       className="fixed z-50 rounded-2xl bg-slate-900/95 backdrop-blur-md border border-slate-700/90 shadow-2xl p-1.5 animate-in fade-in zoom-in-95 duration-100 select-none text-slate-200 text-xs"
     >
       {isAddingNote ? (

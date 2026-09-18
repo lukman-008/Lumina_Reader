@@ -556,59 +556,87 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
 
     const checkSelection = () => {
       const selection = window.getSelection();
-      if (selection && selection.toString().trim().length > 0) {
+      if (selection && !selection.isCollapsed && selection.toString().trim().length > 0) {
         try {
-          const range = selection.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          
-          const container = document.querySelector('.reading-content') || document.querySelector('.react-pdf__Document');
-          if (container && !container.contains(range.commonAncestorContainer)) {
+          const text = selection.toString().trim();
+          if (!text) {
+            setSelectionPosition(null);
             return;
           }
-          
-          let sOffset = -1;
-          let eOffset = -1;
-          const pElem = range.commonAncestorContainer.nodeType === 3 
-             ? range.commonAncestorContainer.parentElement?.closest('p')
-             : (range.commonAncestorContainer as HTMLElement).closest('p');
-             
-          if (pElem) {
-            const preSelectionRange = range.cloneRange();
-            preSelectionRange.selectNodeContents(pElem);
-            preSelectionRange.setEnd(range.startContainer, range.startOffset);
-            sOffset = preSelectionRange.toString().length;
-            eOffset = sOffset + selection.toString().length;
-            const itemIndex = parseInt(pElem.getAttribute('data-paragraph-index') || '0', 10);
-            setSelectionOffsets({ startOffset: sOffset, endOffset: eOffset, startItemIndex: itemIndex });
-          } else {
-            setSelectionOffsets(null);
+
+          const range = selection.getRangeAt(0);
+          let rect = range.getBoundingClientRect();
+          if (rect.width === 0 && rect.height === 0) {
+            const clientRects = range.getClientRects();
+            if (clientRects.length > 0) {
+              rect = clientRects[0];
+            }
           }
-          
-          setSelectedText(selection.toString().trim());
+
+          // Do not show popup if user selected inside buttons, inputs, or navigation bars
+          const startNode = range.startContainer;
+          const element = startNode.nodeType === Node.ELEMENT_NODE 
+            ? (startNode as HTMLElement) 
+            : startNode.parentElement;
+            
+          if (element?.closest('nav, button, input, select, textarea, [role="dialog"], [data-no-swipe="true"]')) {
+            setSelectionPosition(null);
+            return;
+          }
+
+          // Render selection popup immediately
+          setSelectedText(text);
           setSelectionPosition({
             x: rect.left + rect.width / 2,
             y: rect.top,
             bottom: rect.bottom,
           });
+
+          // Compute paragraph offset safely (optional for annotation persistence)
+          try {
+            const commonNode = range.commonAncestorContainer;
+            const commonElem = commonNode.nodeType === Node.ELEMENT_NODE
+              ? (commonNode as HTMLElement)
+              : commonNode.parentElement;
+            const pElem = commonElem?.closest('p');
+            if (pElem && pElem.contains(range.startContainer)) {
+              const preSelectionRange = range.cloneRange();
+              preSelectionRange.selectNodeContents(pElem);
+              preSelectionRange.setEnd(range.startContainer, range.startOffset);
+              const sOffset = preSelectionRange.toString().length;
+              const eOffset = sOffset + text.length;
+              const itemIndex = parseInt(pElem.getAttribute('data-paragraph-index') || '0', 10);
+              setSelectionOffsets({ startOffset: sOffset, endOffset: eOffset, startItemIndex: itemIndex });
+            } else {
+              setSelectionOffsets(null);
+            }
+          } catch {
+            setSelectionOffsets(null);
+          }
         } catch {
-          // Ignore range errors during mid-drag DOM mutation
+          // Ignore range calculation errors during active gestures
         }
+      } else {
+        // Selection cleared or collapsed
+        setSelectionPosition(null);
+        setSelectedText('');
+        setSelectionOffsets(null);
       }
     };
 
     const handleSelectionEnd = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(checkSelection, 80);
+      debounceTimer = setTimeout(checkSelection, 30);
     };
 
     const handleSelectionChange = () => {
-      // Debounce slightly longer for mobile handle dragging
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(checkSelection, 180);
+      debounceTimer = setTimeout(checkSelection, 50);
     };
     
     document.addEventListener('mouseup', handleSelectionEnd);
     document.addEventListener('touchend', handleSelectionEnd);
+    document.addEventListener('pointerup', handleSelectionEnd);
     document.addEventListener('selectionchange', handleSelectionChange);
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.shiftKey && e.key.includes('Arrow')) {
@@ -622,6 +650,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       if (debounceTimer) clearTimeout(debounceTimer);
       document.removeEventListener('mouseup', handleSelectionEnd);
       document.removeEventListener('touchend', handleSelectionEnd);
+      document.removeEventListener('pointerup', handleSelectionEnd);
       document.removeEventListener('selectionchange', handleSelectionChange);
       document.removeEventListener('keyup', handleKeyUp);
     };
@@ -629,26 +658,23 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
 
   // Close popup if clicking outside
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+    const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('.fixed.z-50')) {
         if (!target.closest('mark')) {
           setActiveHighlightPopover(null);
         }
-        // Wait for browser to process the click/tap and potentially clear selection
         setTimeout(() => {
           const selection = window.getSelection();
-          if (!selection || selection.toString().trim().length === 0) {
+          if (!selection || selection.isCollapsed || selection.toString().trim().length === 0) {
             setSelectionPosition(null);
           }
-        }, 120);
+        }, 80);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
     };
   }, []);
 
@@ -1000,12 +1026,14 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       <div 
         data-no-swipe="true"
         onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
         onTouchEnd={(e) => e.stopPropagation()}
         className={`${isZenMode ? 'fixed top-0 left-0 right-0 z-50 transition-all duration-300' : 'relative z-20 shrink-0'} ${isZenMode && !zenNavVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}
       >
         <nav
           data-no-swipe="true"
           onTouchStart={(e) => e.stopPropagation()}
+          onTouchMove={(e) => e.stopPropagation()}
           onTouchEnd={(e) => e.stopPropagation()}
           className={`h-12 border-b ${themeStyle.border} px-2 sm:px-4 flex items-center gap-2 select-none backdrop-blur-xs w-full overflow-hidden ${isZenMode ? themeStyle.bg : ''}`}
           aria-label="Reading Controls"
@@ -1042,8 +1070,17 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
             </button>
           </div>
 
-          {/* Right: Ambient, Speed, AI, Typography, Zen (Scrollable on mobile) */}
-          <div className="flex-1 min-w-0 h-full flex items-center justify-end"><div className="flex items-center overflow-x-auto scrollbar-hide w-full h-full mask-fade-right"><div className="ml-auto flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0 pr-2 [&>button]:shrink-0">
+          {/* Right: Ambient, Speed, AI, Typography, Zen (Scrollable horizontally on mobile without scrolling page) */}
+          <div className="flex-1 min-w-0 h-full flex items-center justify-end">
+            <div 
+              data-no-swipe="true"
+              onTouchStart={(e) => e.stopPropagation()}
+              onTouchMove={(e) => e.stopPropagation()}
+              onTouchEnd={(e) => e.stopPropagation()}
+              style={{ touchAction: 'pan-x', overscrollBehavior: 'contain' }}
+              className="flex items-center overflow-x-auto scrollbar-hide w-full h-full mask-fade-right touch-pan-x overscroll-contain"
+            >
+              <div className="ml-auto flex items-center gap-1 sm:gap-1.5 flex-nowrap shrink-0 pr-2 [&>button]:shrink-0">
             {/* Auto-Pacing toggle */}
             <button
               onClick={() => setIsAutoPacing((prev) => !prev)}
