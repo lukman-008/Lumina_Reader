@@ -51,6 +51,9 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   autoPagingWpm: 240,
   accentColor: 'amber',
   progressDisplayMode: 'chapter',
+  pageTurnAnimation: 'slide',
+  soundEffects: true,
+  hapticFeedback: true,
 };
 
 export async function loadSavedSettings(): Promise<ReaderSettings> {

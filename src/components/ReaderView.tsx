@@ -19,10 +19,14 @@ import {
   Play,
   Pause,
   Eye,
+  BookOpen,
+  Layers,
 } from 'lucide-react';
 import type { Book, ReaderSettings, Highlight, Bookmark, ReadingTheme, AccentColor } from '../types';
 import { db } from '../services/db';
 import { ttsService } from '../services/ttsService';
+import { ambientAudio } from '../services/ambientAudio';
+import { vocabularyService } from '../services/vocabularyService';
 import { estimateReadingTimeMinutes } from '../services/bookParser';
 import { habitTracker } from '../services/habitTracker';
 import { TypographyToolbar } from './TypographyToolbar';
@@ -37,6 +41,8 @@ import { SoundscapeModal } from './SoundscapeModal';
 import { ReadingHabitsDashboard } from './ReadingHabitsDashboard';
 import { NativePdfReader } from './NativePdfReader';
 import { ImageModal } from './ImageModal';
+import { QuickDictionaryModal } from './QuickDictionaryModal';
+import { VocabularyModal } from './VocabularyModal';
 
 interface ReaderViewProps {
   book: Book;

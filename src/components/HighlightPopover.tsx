@@ -7,6 +7,8 @@ import {
   Sparkles,
   X,
   Edit2,
+  BookOpen,
+  BookmarkPlus,
 } from 'lucide-react';
 import type { Highlight } from '../types';
 
@@ -17,6 +19,8 @@ interface HighlightPopoverProps {
   onUpdateHighlight: (id: string, updates: Partial<Highlight>) => void;
   onDeleteHighlight: (id: string) => void;
   onAskAI?: (text: string) => void;
+  onDefine?: (text: string) => void;
+  onAddFlashcard?: (text: string) => void;
 }
 
 const COLORS: { id: Highlight['color']; label: string; bg: string; ring: string }[] = [
@@ -35,10 +39,13 @@ export const HighlightPopover: React.FC<HighlightPopoverProps> = ({
   onUpdateHighlight,
   onDeleteHighlight,
   onAskAI,
+  onDefine,
+  onAddFlashcard,
 }) => {
   const [isEditingNote, setIsEditingNote] = useState(false);
   const [noteText, setNoteText] = useState(highlight?.note || '');
   const [copied, setCopied] = useState(false);
+  const [cardAdded, setCardAdded] = useState(false);
 
   if (!highlight || !position) return null;
 
@@ -82,6 +89,30 @@ export const HighlightPopover: React.FC<HighlightPopoverProps> = ({
         </div>
 
         <div className="flex items-center gap-1">
+          {onDefine && (
+            <button
+              onClick={() => onDefine(highlight.selectedText)}
+              className="p-1 text-slate-400 hover:text-sky-400 rounded-md hover:bg-slate-800 transition"
+              title="Define in Dictionary"
+            >
+              <BookOpen className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {onAddFlashcard && (
+            <button
+              onClick={() => {
+                onAddFlashcard(highlight.selectedText);
+                setCardAdded(true);
+                setTimeout(() => setCardAdded(false), 1400);
+              }}
+              className={`p-1 rounded-md hover:bg-slate-800 transition ${
+                cardAdded ? 'text-emerald-400' : 'text-slate-400 hover:text-amber-400'
+              }`}
+              title={cardAdded ? 'Saved in Flashcards!' : 'Add to Flashcards'}
+            >
+              {cardAdded ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <BookmarkPlus className="w-3.5 h-3.5" />}
+            </button>
+          )}
           <button
             onClick={handleCopy}
             className="p-1 text-slate-400 hover:text-white rounded-md hover:bg-slate-800 transition"

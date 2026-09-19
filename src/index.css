@@ -652,3 +652,86 @@ body {
   .safe-pr { padding-right: env(safe-area-inset-right, 0px); }
   .min-h-safe-screen { min-height: calc(100vh - env(safe-area-inset-bottom, 0px) - env(safe-area-inset-top, 0px)); }
 }
+
+/* Tactile Page Turn Animations */
+@keyframes pageSlideNext {
+  0% {
+    opacity: 0.82;
+    transform: translateX(20px) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes pageSlidePrev {
+  0% {
+    opacity: 0.82;
+    transform: translateX(-20px) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes pageCurlNext {
+  0% {
+    opacity: 0.86;
+    transform-origin: right center;
+    transform: perspective(1200px) rotateY(-5deg) translateX(10px);
+    box-shadow: -8px 0 18px -6px rgba(0, 0, 0, 0.16);
+  }
+  100% {
+    opacity: 1;
+    transform-origin: right center;
+    transform: perspective(1200px) rotateY(0deg) translateX(0);
+    box-shadow: none;
+  }
+}
+
+@keyframes pageCurlPrev {
+  0% {
+    opacity: 0.86;
+    transform-origin: left center;
+    transform: perspective(1200px) rotateY(5deg) translateX(-10px);
+    box-shadow: 8px 0 18px -6px rgba(0, 0, 0, 0.16);
+  }
+  100% {
+    opacity: 1;
+    transform-origin: left center;
+    transform: perspective(1200px) rotateY(0deg) translateX(0);
+    box-shadow: none;
+  }
+}
+
+@keyframes pageFade {
+  0% {
+    opacity: 0.82;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.animate-page-slide-next {
+  animation: pageSlideNext 0.18s cubic-bezier(0.2, 0, 0.2, 1) forwards;
+}
+
+.animate-page-slide-prev {
+  animation: pageSlidePrev 0.18s cubic-bezier(0.2, 0, 0.2, 1) forwards;
+}
+
+.animate-page-curl-next {
+  animation: pageCurlNext 0.22s cubic-bezier(0.2, 0, 0.2, 1) forwards;
+}
+
+.animate-page-curl-prev {
+  animation: pageCurlPrev 0.22s cubic-bezier(0.2, 0, 0.2, 1) forwards;
+}
+
+.animate-page-fade {
+  animation: pageFade 0.16s ease-out forwards;
+}
+

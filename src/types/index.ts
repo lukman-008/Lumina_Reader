@@ -101,6 +101,10 @@ export interface ReaderSettings {
   // UI Customization
   accentColor?: AccentColor;
   progressDisplayMode?: 'book' | 'chapter';
+  // Reading Experience & Sensory Feedback
+  pageTurnAnimation?: 'slide' | 'curl' | 'fade';
+  soundEffects?: boolean; // tactile paper rustle & click sounds
+  hapticFeedback?: boolean; // gentle vibration on mobile
 }
 
 export interface ReadingSession {

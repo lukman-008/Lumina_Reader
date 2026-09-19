@@ -20,6 +20,9 @@ import {
   Minus,
   Plus,
   Check,
+  Volume2,
+  Smartphone,
+  BookOpen,
 } from 'lucide-react';
 import type { ReaderSettings, ReadingTheme, FontFamilyChoice, LayoutMode, AccentColor } from '../types';
 import { DEFAULT_SETTINGS } from '../services/db';
@@ -546,8 +549,74 @@ export const TypographyToolbar: React.FC<TypographyToolbarProps> = ({
                 </div>
               </div>
 
+              {/* Page Flip Style */}
+              <div className="space-y-1.5 pt-1 border-t border-slate-800">
+                <span className="text-xs font-semibold text-slate-300">Page Turn Transition</span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(
+                    [
+                      { id: 'slide', label: 'Slide', desc: 'Smooth horizontal glide' },
+                      { id: 'curl', label: 'Book Curl', desc: 'Tactile page curl' },
+                      { id: 'fade', label: 'Fade', desc: 'Minimal soft fade' },
+                    ] as const
+                  ).map((anim) => (
+                    <button
+                      key={anim.id}
+                      type="button"
+                      onClick={() => onUpdateSettings({ pageTurnAnimation: anim.id })}
+                      className={`p-2 rounded-xl text-center transition cursor-pointer border ${
+                        (settings.pageTurnAnimation || 'slide') === anim.id
+                          ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 font-semibold'
+                          : 'bg-slate-800/40 border-slate-700/50 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <div className="text-xs">{anim.label}</div>
+                      <div className="text-[9px] opacity-75 truncate">{anim.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sensory & Tactile Feedback */}
+              <div className="space-y-2 pt-1 border-t border-slate-800">
+                <span className="text-xs font-semibold text-slate-300">Sensory & Tactile Experience</span>
+                
+                <label className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50 cursor-pointer hover:bg-slate-800/80 transition">
+                  <span className="text-xs text-slate-200 flex items-center gap-2">
+                    <Volume2 className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div>
+                      <div className="font-medium">Tactile Sound Effects</div>
+                      <div className="text-[10px] text-slate-400">Procedural paper rustle on page turn & cues</div>
+                    </div>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={settings.soundEffects ?? true}
+                    onChange={(e) => onUpdateSettings({ soundEffects: e.target.checked })}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-800 border-slate-700 accent-amber-500"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50 cursor-pointer hover:bg-slate-800/80 transition">
+                  <span className="text-xs text-slate-200 flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-amber-400 shrink-0" />
+                    <div>
+                      <div className="font-medium">Haptic Vibration Feedback</div>
+                      <div className="text-[10px] text-slate-400">Tactile pulse on page flips and notes</div>
+                    </div>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={settings.hapticFeedback ?? true}
+                    onChange={(e) => onUpdateSettings({ hapticFeedback: e.target.checked })}
+                    className="w-4 h-4 rounded text-amber-500 focus:ring-amber-500 bg-slate-800 border-slate-700 accent-amber-500"
+                  />
+                </label>
+              </div>
+
               {/* Focus & Accessibility Toggles */}
               <div className="space-y-2 pt-1 border-t border-slate-800">
+                <span className="text-xs font-semibold text-slate-300">Focus & Accessibility</span>
                 <label className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/50 border border-slate-700/50 cursor-pointer hover:bg-slate-800/80 transition">
                   <span className="text-xs text-slate-200 flex items-center gap-2">
                     <Eye className="w-4 h-4 text-amber-400 shrink-0" />

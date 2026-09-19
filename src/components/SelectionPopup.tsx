@@ -8,6 +8,8 @@ import {
   Check,
   X,
   FileEdit,
+  BookOpen,
+  BookmarkPlus,
 } from 'lucide-react';
 import type { Highlight } from '../types';
 
@@ -19,6 +21,8 @@ interface SelectionPopupProps {
   onActiveNoteChange?: (isActive: boolean) => void;
   onReadAloud: () => void;
   onAskAI: () => void;
+  onDefine?: (text: string) => void;
+  onAddFlashcard?: (text: string) => void;
   onClose: () => void;
 }
 
@@ -38,9 +42,12 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
   onActiveNoteChange,
   onReadAloud,
   onAskAI,
+  onDefine,
+  onAddFlashcard,
   onClose,
 }) => {
   const [copied, setCopied] = useState(false);
+  const [cardAdded, setCardAdded] = useState(false);
   const [isAddingNote, setIsAddingNote] = useState(false);
   const [noteInput, setNoteInput] = useState('');
   const [selectedColor, setSelectedColor] = useState<Highlight['color']>('yellow');
@@ -251,6 +258,47 @@ export const SelectionPopup: React.FC<SelectionPopupProps> = ({
             <MessageSquare className="w-3.5 h-3.5 text-amber-400" />
             <span>Note</span>
           </button>
+
+          {/* Quick Dictionary Definition */}
+          {onDefine && (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDefine(activeText);
+              }}
+              className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sky-300 bg-sky-500/15 hover:bg-sky-500/25 active:bg-sky-500/35 transition cursor-pointer font-medium text-[11px] shrink-0 border border-sky-500/30"
+              title="Instant Dictionary Definition & Pronunciation"
+            >
+              <BookOpen className="w-3.5 h-3.5 text-sky-400" />
+              <span>Define</span>
+            </button>
+          )}
+
+          {/* Quick Add to Flashcards */}
+          {onAddFlashcard && (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onAddFlashcard(activeText);
+                setCardAdded(true);
+                setTimeout(() => setCardAdded(false), 1500);
+              }}
+              className={`p-1.5 rounded-lg transition cursor-pointer shrink-0 ${
+                cardAdded
+                  ? 'text-emerald-400 bg-emerald-500/20'
+                  : 'text-slate-300 hover:text-amber-300 hover:bg-slate-800 active:scale-95'
+              }`}
+              title={cardAdded ? 'Saved in Flashcards!' : 'Save to Vocabulary Flashcard Deck'}
+            >
+              {cardAdded ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <BookmarkPlus className="w-3.5 h-3.5" />}
+            </button>
+          )}
 
           {/* Read aloud action */}
           <button
