@@ -102,6 +102,8 @@ export default function App() {
       setBooks(all);
       const allShelves = await db.shelves.toArray();
       setShelves(allShelves);
+      const savedSettings = await loadSavedSettings();
+      setSettings(savedSettings);
       
       // If we aren't explicitly clearing the selection, and one is currently active in the state closure, refresh it.
       if (!forceClearSelection && selectedBook) {

@@ -13,9 +13,11 @@ import {
   Trash2,
   ArrowRight,
   Globe,
+  Database,
 } from 'lucide-react';
 import type { Book, Shelf, ImportQueueItem } from '../types';
 import { parseUploadedBook, countWords } from '../services/bookParser';
+import { backupService } from '../services/backupService';
 import { db } from '../services/db';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 
@@ -76,6 +78,7 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
       else if (ext === 'pdf') format = 'pdf';
       else if (ext === 'txt') format = 'txt';
       else if (ext === 'md') format = 'md';
+      else if (ext === 'lumina' || file.name.includes('lumina_library_backup')) format = 'lumina';
 
       return {
         id: 'queue-' + Math.random().toString(36).substr(2, 9),
@@ -94,6 +97,26 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
       setQueue((prev) =>
         prev.map((q) => (q.id === item.id ? { ...q, status: 'parsing' } : q))
       );
+
+      if (item.format === 'lumina') {
+        try {
+          const parsedBackup = await backupService.parseBackupFile(item.file);
+          setQueue((prev) =>
+            prev.map((q) =>
+              q.id === item.id ? { ...q, status: 'success', parsedBackup } : q
+            )
+          );
+        } catch (err: any) {
+          setQueue((prev) =>
+            prev.map((q) =>
+              q.id === item.id
+                ? { ...q, status: 'error', errorMessage: err.message || 'Failed to parse .lumina backup' }
+                : q
+            )
+          );
+        }
+        continue;
+      }
 
       try {
         const parsed = await parseUploadedBook(item.file);
@@ -134,20 +157,30 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
   };
 
   const handleSaveAllToLibrary = async () => {
-    const readyItems = queue.filter((item) => item.status === 'success' && item.parsedBook);
+    const readyItems = queue.filter(
+      (item) => item.status === 'success' && (item.parsedBook || item.parsedBackup)
+    );
     if (readyItems.length === 0) return;
 
     setIsProcessing(true);
-    for (const item of readyItems) {
-      if (item.parsedBook) {
-        const bookToSave: Book = {
-          ...item.parsedBook,
-          shelfId: selectedShelfId || undefined,
-        };
-        await db.books.put(bookToSave);
+    try {
+      for (const item of readyItems) {
+        if (item.parsedBackup) {
+          await backupService.restoreBackup(item.parsedBackup, 'merge');
+        } else if (item.parsedBook) {
+          const bookToSave: Book = {
+            ...item.parsedBook,
+            shelfId: selectedShelfId || undefined,
+          };
+          await db.books.put(bookToSave);
+        }
       }
+    } catch (err) {
+      console.error('Failed to import items:', err);
+    } finally {
+      setIsProcessing(false);
     }
-    setIsProcessing(false);
+
     onBooksImported();
     handleClose();
   };
@@ -289,7 +322,7 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept=".epub,.txt,.md,.pdf"
+                  accept=".epub,.txt,.md,.pdf,.lumina"
                   onChange={(e) => handleFileSelect(e.target.files)}
                   className="hidden"
                 />
@@ -300,7 +333,7 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
                   Click to browse or drag & drop files here
                 </h3>
                 <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                  Batch import multiple files simultaneously. Supports standard EPUB, Markdown (.md), Plain Text (.txt), and PDF.
+                  Batch import multiple files simultaneously. Supports standard EPUB, Markdown (.md), Plain Text (.txt), PDF, and .lumina library archives.
                 </p>
                 <div className="flex items-center gap-2 mt-3">
                   <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-amber-400 border border-slate-700">
@@ -314,6 +347,9 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
                   </span>
                   <span className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-rose-400 border border-slate-700">
                     PDF
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-amber-500/10 text-[10px] font-mono text-amber-300 border border-amber-500/30">
+                    .LUMINA BACKUP
                   </span>
                 </div>
               </div>
@@ -339,7 +375,9 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="p-1.5 rounded-md bg-slate-800 text-slate-300 shrink-0">
-                            {item.format === 'epub' ? (
+                            {item.format === 'lumina' ? (
+                              <Database className="w-3.5 h-3.5 text-amber-400" />
+                            ) : item.format === 'epub' ? (
                               <BookOpen className="w-3.5 h-3.5 text-amber-400" />
                             ) : item.format === 'md' ? (
                               <FileCode className="w-3.5 h-3.5 text-sky-400" />
@@ -353,7 +391,9 @@ export const FileImporterModal: React.FC<FileImporterModalProps> = ({
                             </p>
                             <p className="text-[10px] text-slate-500">
                               {(item.size / 1024).toFixed(1)} KB •{' '}
-                              {item.parsedBook
+                              {item.parsedBackup
+                                ? `Lumina Archive (${item.parsedBackup.books.length} books, ${item.parsedBackup.highlights.length} highlights, ${item.parsedBackup.shelves.length} shelves)`
+                                : item.parsedBook
                                 ? `${(item.parsedBook.chapters?.length || 0)} chapters, ${item.parsedBook.totalWords.toLocaleString()} words`
                                 : item.status}
                             </p>

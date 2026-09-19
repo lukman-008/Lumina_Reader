@@ -5,7 +5,7 @@ import { Book, ReaderSettings, Highlight } from '../types';
 import { db } from '../services/db';
 import { habitTracker } from '../services/habitTracker';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Maximize2, Minimize2, Settings, List, X, Square, Columns2, ScrollText, Moon, Sun, Palette, Eye, CloudRain, Flame, Volume2, Zap, Sliders, BookOpen, Highlighter, Sparkles, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Maximize2, Minimize2, Settings, List, X, Square, Columns2, ScrollText, Moon, Sun, Palette, Eye, CloudRain, Flame, Volume2, Zap, Sliders, BookOpen, Highlighter, Sparkles, Loader2, Layers, Search, Copy, Check } from 'lucide-react';
 import { SelectionPopup } from './SelectionPopup';
 import { HighlightPopover } from './HighlightPopover';
 import { AIAssistantDrawer } from './AIAssistantDrawer';
@@ -139,6 +139,34 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const [isExtracting, setIsExtracting] = useState(false);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
 
+  // Persistent per-page OCR cache
+  const [ocrByPage, setOcrByPage] = useState<Record<number, string>>(() => {
+    try {
+      const cached = localStorage.getItem(`lumina_ocr_${book.id}`);
+      return cached ? JSON.parse(cached) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [ocrOverlayMode, setOcrOverlayMode] = useState<'transparent' | 'visible' | 'off'>('transparent');
+  const [isOcrDrawerOpen, setIsOcrDrawerOpen] = useState(false);
+  const [ocrSearchQuery, setOcrSearchQuery] = useState('');
+  const [ocrCopied, setOcrCopied] = useState(false);
+  const [selectedPageNumber, setSelectedPageNumber] = useState<number>(pageNumber);
+
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(`lumina_ocr_${book.id}`);
+      if (cached) {
+        setOcrByPage(JSON.parse(cached));
+      } else {
+        setOcrByPage({});
+      }
+    } catch {
+      setOcrByPage({});
+    }
+  }, [book.id]);
+
   const extractCurrentPages = useCallback(async () => {
     if (!pdfDoc) return;
     setIsExtracting(true);
@@ -150,6 +178,12 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
       }
       
       for (const p of pagesToExtract) {
+        // If OCR text was previously extracted for this page, use it directly!
+        if (ocrByPage[p] && ocrByPage[p].trim().length > 0) {
+          combinedText += ocrByPage[p].trim() + '\n\n\n';
+          continue;
+        }
+
         const page = await pdfDoc.getPage(p);
         const textContent = await page.getTextContent();
         
@@ -186,11 +220,15 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
       setExtractedText(combinedText);
     } catch (e) {
       console.error(e);
-      console.error('Extraction error:', e); setExtractedText("Failed to extract text from this page. This PDF might be an image without an OCR layer or the document was unmounted.");
+      if (ocrByPage[pageNumber]) {
+        setExtractedText(ocrByPage[pageNumber]);
+      } else {
+        setExtractedText("Failed to extract text from this page. This PDF might be an image without an OCR layer or the document was unmounted.");
+      }
     } finally {
       setIsExtracting(false);
     }
-  }, [pdfDoc, pageNumber, settings.layoutMode, numPages]);
+  }, [pdfDoc, pageNumber, settings.layoutMode, numPages, ocrByPage]);
 
   useEffect(() => {
     if (pdfViewMode === 'reader' && pdfDoc) {
@@ -213,10 +251,6 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
       );
     });
   };
-
-
-  
-
 
   const [isSoundscapeOpen, setIsSoundscapeOpen] = useState(false);
   const [isHabitsOpen, setIsHabitsOpen] = useState(false);
@@ -248,39 +282,46 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const [isOcrExtracting, setIsOcrExtracting] = useState(false);
   const [activeImageModal, setActiveImageModal] = useState<{ src: string; alt?: string } | null>(null);
 
-  const handleOcrCurrentPage = async () => {
+  // High-fidelity offscreen OCR extraction directly from pdfDoc
+  const handleOcrCurrentPage = async (targetPageNum = pageNumber) => {
+    if (!pdfDoc) return;
     setIsOcrExtracting(true);
     try {
-      let targetCanvas: HTMLCanvasElement | null = null;
-      if (containerRef.current) {
-        const pageEl = containerRef.current.querySelector(`[data-page-number="${pageNumber}"]`);
-        if (pageEl) {
-          targetCanvas = pageEl.querySelector('canvas');
-        }
-        if (!targetCanvas) {
-          targetCanvas = containerRef.current.querySelector('canvas');
-        }
-      }
+      const page = await pdfDoc.getPage(targetPageNum);
+      const viewport = page.getViewport({ scale: 2.0 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error("Could not initialize offscreen canvas context");
 
-      if (!targetCanvas) {
-        throw new Error("Page canvas not ready yet. Please wait a moment for the page to render.");
-      }
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.95);
 
-      const imageBase64 = targetCanvas.toDataURL('image/jpeg', 0.92);
       const res = await aiService.extractTextFromImage(
         imageBase64,
-        "Transcribe all readable text from this scanned book page accurately. Maintain original paragraphs and line structure. Do not include markdown code fences or conversational filler—output only the transcribed text."
+        "Transcribe all readable text from this scanned book page accurately into clean paragraphs and sentences. Maintain original reading flow, headings, and paragraph breaks. Do not include markdown code fences or conversational filler—output only the transcribed text."
       );
 
       if (res.text && res.text.trim().length > 0) {
-        setExtractedText(res.text.trim());
-        setPdfViewMode('reader');
+        const text = res.text.trim();
+        setOcrByPage(prev => {
+          const next = { ...prev, [targetPageNum]: text };
+          try {
+            localStorage.setItem(`lumina_ocr_${book.id}`, JSON.stringify(next));
+          } catch (e) {
+            console.warn('Failed to save OCR to localStorage:', e);
+          }
+          return next;
+        });
+        setExtractedText(text);
+        setIsOcrDrawerOpen(true);
       } else {
-        setExtractedText("No readable text could be recognized on this page.");
+        alert("No readable text could be recognized on this page.");
       }
     } catch (err: any) {
       console.error('OCR Error:', err);
-      setExtractedText(`OCR Failed: ${err.message || 'Unable to extract text from page image'}`);
+      alert(`OCR Extraction Failed: ${err.message || 'Unable to extract text from page image'}`);
     } finally {
       setIsOcrExtracting(false);
     }
@@ -329,11 +370,30 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
 
   useEffect(() => {
     const loadPdf = async () => {
-      const bookData = await db.books.get(book.id);
-      if (bookData?.rawFile) {
-        setFileData(bookData.rawFile);
-        const url = URL.createObjectURL(new Blob([bookData.rawFile], { type: 'application/pdf' }));
-        setPdfUrl(url);
+      try {
+        const bookData = await db.books.get(book.id);
+        const raw: any = bookData?.rawFile || book.rawFile;
+        if (raw) {
+          let buffer: ArrayBuffer | null = null;
+          if (raw instanceof Blob) {
+            buffer = await raw.arrayBuffer();
+          } else if (raw instanceof Uint8Array) {
+            buffer = raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer;
+          } else if (raw instanceof ArrayBuffer) {
+            buffer = raw;
+          } else if (typeof raw === 'string') {
+            const res = await fetch(`data:application/octet-stream;base64,${raw.replace(/\s/g, '')}`);
+            buffer = await res.arrayBuffer();
+          }
+
+          if (buffer && buffer.byteLength > 0) {
+            setFileData(buffer);
+            const url = URL.createObjectURL(new Blob([buffer], { type: 'application/pdf' }));
+            setPdfUrl(url);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load PDF document data:', err);
       }
     };
     loadPdf();
@@ -493,6 +553,111 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     setActiveHighlightPopover(null);
   };
 
+  // Helper to render paragraph with embedded highlight marks and optional Bionic reading
+  const renderHighlightedParagraph = (text: string, matchedHls: Highlight[], isBionic = false) => {
+    if (!matchedHls || matchedHls.length === 0) {
+      return isBionic ? formatBionicText(text) : text;
+    }
+    
+    const sorted = [...matchedHls].sort((a, b) => {
+      const idxA = text.indexOf(a.selectedText);
+      const idxB = text.indexOf(b.selectedText);
+      return (idxA === -1 ? 999999 : idxA) - (idxB === -1 ? 999999 : idxB);
+    });
+
+    const parts: React.ReactNode[] = [];
+    let curIdx = 0;
+
+    sorted.forEach((hl, i) => {
+      const start = text.indexOf(hl.selectedText, curIdx);
+      if (start === -1) return;
+
+      if (start > curIdx) {
+        const unhighlighted = text.slice(curIdx, start);
+        parts.push(
+          <React.Fragment key={`text-${i}-${curIdx}`}>
+            {isBionic ? formatBionicText(unhighlighted) : unhighlighted}
+          </React.Fragment>
+        );
+      }
+
+      parts.push(
+        <mark
+          key={`hl-${hl.id}-${i}`}
+          id={`hl-${hl.id}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            const rect = e.currentTarget.getBoundingClientRect();
+            setActiveHighlightPopover({
+              highlight: hl,
+              position: { x: rect.left + rect.width / 2, y: rect.top - 10 },
+            });
+          }}
+          className={`cursor-pointer rounded-xs px-0.5 transition hover:opacity-80 inline select-text ${
+            highlightColors[hl.color] || highlightColors.yellow
+          }`}
+          title={hl.note ? `[Note]: ${hl.note}` : 'Click to edit highlight'}
+        >
+          {isBionic ? formatBionicText(hl.selectedText) : hl.selectedText}
+          {hl.note && (
+            <sup className="ml-0.5 px-1 rounded text-[9px] font-sans font-medium select-none bg-amber-500/20 text-amber-500 border border-amber-500/40">
+              note
+            </sup>
+          )}
+        </mark>
+      );
+
+      curIdx = start + hl.selectedText.length;
+    });
+
+    if (curIdx < text.length) {
+      const unhighlighted = text.slice(curIdx);
+      parts.push(
+        <React.Fragment key={`text-end-${curIdx}`}>
+          {isBionic ? formatBionicText(unhighlighted) : unhighlighted}
+        </React.Fragment>
+      );
+    }
+
+    return parts;
+  };
+
+  // OCR selectable text overlay rendered directly over the native PDF canvas
+  const renderOcrTextLayer = (pNum: number) => {
+    const ocrText = ocrByPage[pNum];
+    if (!ocrText || ocrOverlayMode === 'off') return null;
+
+    const pageHighlights = highlights.filter(h => h.chapterIndex === pNum - 1);
+
+    return (
+      <div 
+        key={`ocr-layer-${pNum}`}
+        data-ocr-layer={`page-${pNum}`}
+        className={`absolute inset-0 z-10 overflow-hidden pointer-events-auto select-text font-serif leading-relaxed transition-opacity duration-200 ${
+          ocrOverlayMode === 'transparent'
+            ? 'opacity-0 hover:opacity-5 cursor-text'
+            : 'bg-amber-50/92 dark:bg-slate-900/92 text-slate-900 dark:text-slate-100 p-8 cursor-text backdrop-blur-xs shadow-inner'
+        }`}
+        style={{
+          userSelect: 'text',
+          WebkitUserSelect: 'text',
+        }}
+        title={ocrOverlayMode === 'transparent' ? "Selectable OCR Layer: Click and drag over text to select, highlight, or read aloud" : "Visible OCR Layer"}
+      >
+        <div className="w-full h-full flex flex-col justify-start select-text p-6">
+          {ocrText.split('\n\n').map((paragraph, pIdx) => {
+            const matched = pageHighlights.filter(h => h.selectedText && paragraph.includes(h.selectedText));
+            return (
+              <p key={pIdx} className="mb-4 whitespace-pre-wrap select-text selection:bg-amber-400/40 selection:text-current">
+                {renderHighlightedParagraph(paragraph, matched, false)}
+              </p>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   const renderHighlights = (pNum: number) => {
     const pageHighlights = highlights.filter(h => h.chapterIndex === pNum - 1);
     if (pageHighlights.length === 0) return null;
@@ -524,10 +689,11 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     const textToSave = (customText || selectedText || '').trim();
     if (!textToSave) return;
     
+    const targetPage = selectedPageNumber || pageNumber;
     await db.highlights.put({
       id: `hl-${Date.now()}`,
       bookId: book.id,
-      chapterIndex: pageNumber - 1,
+      chapterIndex: targetPage - 1,
       selectedText: textToSave,
       rects: selectionRects.length > 0 ? selectionRects : undefined,
       color: color as any,
@@ -584,16 +750,31 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
             let normalizedRects: { left: number; top: number; width: number; height: number }[] = [];
             const anchorParent = (selection.anchorNode as Node)?.parentElement;
             const focusParent = (selection.focusNode as Node)?.parentElement;
-            const pageContainer = anchorParent?.closest('.react-pdf__Page') || focusParent?.closest('.react-pdf__Page') || (range.commonAncestorContainer as HTMLElement)?.closest?.('.react-pdf__Page');
+            const pageContainer = anchorParent?.closest('.react-pdf__Page') || 
+                                  focusParent?.closest('.react-pdf__Page') || 
+                                  (range.commonAncestorContainer as HTMLElement)?.closest?.('.react-pdf__Page') ||
+                                  anchorParent?.closest('[data-page-number]') ||
+                                  focusParent?.closest('[data-page-number]') ||
+                                  (range.commonAncestorContainer as HTMLElement)?.closest?.('[data-page-number]');
+            
             if (pageContainer) {
+               const pAttr = pageContainer.getAttribute('data-page-number');
+               if (pAttr) {
+                 const parsedP = parseInt(pAttr, 10);
+                 if (!isNaN(parsedP)) setSelectedPageNumber(parsedP);
+               } else {
+                 setSelectedPageNumber(pageNumber);
+               }
                const pageRect = pageContainer.getBoundingClientRect();
                const rects = Array.from(range.getClientRects());
                normalizedRects = rects.map(r => ({
-                 left: ((r.left - pageRect.left) / pageRect.width) * 100,
-                 top: ((r.top - pageRect.top) / pageRect.height) * 100,
-                 width: (r.width / pageRect.width) * 100,
-                 height: (r.height / pageRect.height) * 100,
+                 left: Math.max(0, Math.min(100, ((r.left - pageRect.left) / pageRect.width) * 100)),
+                 top: Math.max(0, Math.min(100, ((r.top - pageRect.top) / pageRect.height) * 100)),
+                 width: Math.max(0.5, Math.min(100, (r.width / pageRect.width) * 100)),
+                 height: Math.max(0.5, Math.min(100, (r.height / pageRect.height) * 100)),
                }));
+            } else {
+               setSelectedPageNumber(pageNumber);
             }
 
             setSelectedText(text);
@@ -638,19 +819,19 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
       document.removeEventListener('pointerup', handleSelectionEnd);
       document.removeEventListener('selectionchange', handleSelectionChange);
     };
-  }, []);
+  }, [pageNumber]);
 
   // Close popup if clicking outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (target.closest?.('[data-selection-popup], [data-highlight-popover], .fixed.z-50, [role="dialog"]')) {
+      if (target.closest?.('[data-selection-popup], [data-highlight-popover], .fixed.z-50, [role="dialog"], [data-ocr-drawer]')) {
         return;
       }
       if (isEditingNoteRef.current) {
         return;
       }
-      if (!target.closest('.pointer-events-auto.mix-blend-multiply')) {
+      if (!target.closest('.pointer-events-auto.mix-blend-multiply') && !target.closest('mark')) {
         setActiveHighlightPopover(null);
       }
       setTimeout(() => {
@@ -723,6 +904,19 @@ return (
         .react-pdf__Page__textContent span::-moz-selection, .textLayer :is(span, br)::-moz-selection {
           background: rgba(0, 102, 255, 0.3) !important;
           color: transparent !important;
+        }
+        [data-ocr-layer] {
+          user-select: text !important;
+          -webkit-user-select: text !important;
+          pointer-events: auto !important;
+        }
+        [data-ocr-layer] p::selection, [data-ocr-layer] span::selection, [data-ocr-layer] *::selection {
+          background: rgba(245, 158, 11, 0.45) !important;
+          color: inherit !important;
+        }
+        [data-ocr-layer] p::-moz-selection, [data-ocr-layer] span::-moz-selection, [data-ocr-layer] *::-moz-selection {
+          background: rgba(245, 158, 11, 0.45) !important;
+          color: inherit !important;
         }
       ` }} />
 
@@ -870,19 +1064,48 @@ return (
               <span className="hidden sm:inline text-xs font-medium">{pdfViewMode === 'native' ? 'Reader' : 'Native'}</span>
             </button>
 
-            <button
-              onClick={handleOcrCurrentPage}
-              disabled={isOcrExtracting}
-              className="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-medium transition cursor-pointer disabled:opacity-50"
-              title="Extract Text from Scanned Page / Image with AI OCR"
-            >
-              {isOcrExtracting ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
-              ) : (
-                <Sparkles className="w-3.5 h-3.5" />
-              )}
-              <span className="hidden sm:inline">AI OCR</span>
-            </button>
+            {ocrByPage[pageNumber] ? (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsOcrDrawerOpen(prev => !prev)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition cursor-pointer border ${
+                    isOcrDrawerOpen 
+                      ? 'bg-amber-500/25 text-amber-600 dark:text-amber-400 border-amber-500/40 ring-1 ring-amber-500/30' 
+                      : 'bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                  }`}
+                  title="View and interact with page OCR text transcription"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
+                  <span className="hidden sm:inline font-semibold">OCR Text</span>
+                </button>
+                <button
+                  onClick={() => setOcrOverlayMode(m => m === 'transparent' ? 'visible' : m === 'visible' ? 'off' : 'transparent')}
+                  className={`px-2 py-1 rounded-md border text-xs font-medium transition cursor-pointer flex items-center gap-1 ${
+                    ocrOverlayMode !== 'off'
+                      ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                      : `hover:bg-black/5 dark:hover:bg-white/10 ${themeStyle.border} ${themeStyle.text}`
+                  }`}
+                  title={`OCR Selectable Overlay Mode: ${ocrOverlayMode}`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline text-[11px] capitalize">{ocrOverlayMode}</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => handleOcrCurrentPage(pageNumber)}
+                disabled={isOcrExtracting}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-medium transition cursor-pointer disabled:opacity-50"
+                title="Extract Text from Scanned Page / Image with AI OCR"
+              >
+                {isOcrExtracting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                )}
+                <span className="hidden sm:inline">{isOcrExtracting ? 'Transcribing...' : 'AI OCR'}</span>
+              </button>
+            )}
             
             <div className="w-px h-6 bg-slate-500/30 mx-1"></div>
 
@@ -1033,11 +1256,15 @@ return (
                     textAlign: settings.textAlign as any
                   }}
                 >
-                  {extractedText.split('\n\n').map((paragraph, idx) => (
-                    <p key={idx} className="mb-6 whitespace-pre-wrap">
-                      {formatBionicText(paragraph)}
-                    </p>
-                  ))}
+                  {extractedText.split('\n\n').map((paragraph, idx) => {
+                    const pageHighlights = highlights.filter(h => h.chapterIndex === pageNumber - 1);
+                    const matched = pageHighlights.filter(h => h.selectedText && paragraph.includes(h.selectedText));
+                    return (
+                      <p key={idx} className="mb-6 whitespace-pre-wrap select-text selection:bg-amber-400/40">
+                        {renderHighlightedParagraph(paragraph, matched, settings.bionicReading)}
+                      </p>
+                    );
+                  })}
                   <div className="mt-12 pt-8 border-t border-current/10 flex flex-wrap gap-4 items-center justify-between">
                     <button
                       onClick={() => setPageNumber(p => Math.max(1, p - 1))}
@@ -1066,7 +1293,7 @@ return (
                    <p className="text-xs text-current/70 mb-4">No embedded digital text was found on this PDF page. Use AI OCR to transcribe the page and make text selectable, readable, and highlightable.</p>
                    <div className="flex flex-wrap gap-2 justify-center">
                      <button 
-                       onClick={handleOcrCurrentPage} 
+                       onClick={() => handleOcrCurrentPage(pageNumber)} 
                        disabled={isOcrExtracting}
                        className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-slate-950 font-medium rounded-xl text-xs hover:bg-amber-400 active:scale-95 transition cursor-pointer shadow-md disabled:opacity-50"
                      >
@@ -1126,6 +1353,7 @@ return (
                                 error={<div className="h-96 flex items-center justify-center text-red-500">Error rendering page {pNum}</div>}
                               />
                               {renderHighlights(pNum)}
+                              {renderOcrTextLayer(pNum)}
                             </>
                           ) : (
                             <div className="absolute inset-0 flex items-center justify-center text-slate-400 bg-slate-50/50">
@@ -1139,7 +1367,7 @@ return (
                 ) : settings.layoutMode === 'double' && containerWidth > 800 ? (
                   // Double Page Rendering
                   <div className="flex w-full justify-center gap-1 md:gap-4 p-4 ">
-                    <div className="shadow-xl flex-shrink-0 bg-white relative" style={{ width: (pdfMaxWidth * scale) / 2 }}>
+                    <div data-page-number={pageNumber} className="shadow-xl flex-shrink-0 bg-white relative" style={{ width: (pdfMaxWidth * scale) / 2 }}>
                       <Page suspense={false}
                         pageNumber={pageNumber}
                         width={(pdfMaxWidth * scale) / 2}
@@ -1149,9 +1377,10 @@ return (
                         error={<div className="h-96 flex items-center justify-center text-red-500">Error rendering page</div>}
                       />
                       {renderHighlights(pageNumber)}
+                      {renderOcrTextLayer(pageNumber)}
                     </div>
                     {pageNumber + 1 <= numPages && (
-                      <div className="shadow-xl flex-shrink-0 bg-white relative" style={{ width: (pdfMaxWidth * scale) / 2 }}>
+                      <div data-page-number={pageNumber + 1} className="shadow-xl flex-shrink-0 bg-white relative" style={{ width: (pdfMaxWidth * scale) / 2 }}>
                         <Page suspense={false}
                           pageNumber={pageNumber + 1}
                           width={(pdfMaxWidth * scale) / 2}
@@ -1161,12 +1390,13 @@ return (
                           error={<div className="h-96 flex items-center justify-center text-red-500">Error rendering page</div>}
                         />
                         {renderHighlights(pageNumber + 1)}
+                        {renderOcrTextLayer(pageNumber + 1)}
                       </div>
                     )}
                   </div>
                 ) : (
                   // Single Page Rendering
-                  <div className="flex justify-center shadow-xl bg-white relative">
+                  <div data-page-number={pageNumber} className="flex justify-center shadow-xl bg-white relative">
                     <Page suspense={false}
                       pageNumber={pageNumber}
                       width={pdfMaxWidth * scale}
@@ -1176,6 +1406,7 @@ return (
                       error={<div className="h-96 flex items-center justify-center text-red-500">Error rendering page</div>}
                     />
                     {renderHighlights(pageNumber)}
+                    {renderOcrTextLayer(pageNumber)}
                   </div>
                 )}
               </Document>
@@ -1357,6 +1588,150 @@ return (
           chapterIndex={pageNumber - 1}
           onClose={() => setActiveImageModal(null)}
         />
+      )}
+
+      {/* Interactive OCR Drawer */}
+      {isOcrDrawerOpen && (
+        <div
+          data-ocr-drawer="true"
+          className={`fixed bottom-0 left-0 right-0 z-40 max-h-[70vh] flex flex-col rounded-t-2xl shadow-2xl border-t backdrop-blur-xl transition-all duration-200 animate-in slide-in-from-bottom-5 ${themeStyle.bg} ${themeStyle.border} ${themeStyle.text}`}
+        >
+          {/* Header */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5 border-b border-current/10 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <span className="p-1.5 rounded-lg bg-amber-500/20 text-amber-500">
+                <Sparkles className="w-4 h-4" />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-sm">
+                    OCR Transcription — Page {pageNumber}
+                  </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-500/20 text-emerald-500 border border-emerald-500/30">
+                    Gemini 3.8 Vision
+                  </span>
+                </div>
+                <p className="text-[11px] opacity-60">
+                  Select any word or sentence below to Highlight, attach Notes, or Listen
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Overlay Mode Toggle */}
+              <button
+                onClick={() => setOcrOverlayMode(m => m === 'transparent' ? 'visible' : m === 'visible' ? 'off' : 'transparent')}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition cursor-pointer"
+                title="Toggle OCR Overlay on the PDF canvas (Transparent / Visible / Off)"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Overlay: <strong className="capitalize">{ocrOverlayMode}</strong></span>
+              </button>
+
+              {/* Copy Full OCR Text */}
+              {ocrByPage[pageNumber] && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(ocrByPage[pageNumber]);
+                    setOcrCopied(true);
+                    setTimeout(() => setOcrCopied(false), 1500);
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-current/15 hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer"
+                  title="Copy full page OCR text to clipboard"
+                >
+                  {ocrCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{ocrCopied ? 'Copied' : 'Copy All'}</span>
+                </button>
+              )}
+
+              {/* Listen to page text */}
+              {ocrByPage[pageNumber] && (
+                <button
+                  onClick={() => ttsService.speakText(ocrByPage[pageNumber], { rate: 1.0 })}
+                  className="p-1.5 rounded-lg border border-current/15 hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer"
+                  title="Read page aloud with offline speech"
+                >
+                  <Volume2 className="w-4 h-4 text-amber-500" />
+                </button>
+              )}
+
+              {/* Re-run OCR */}
+              <button
+                onClick={() => handleOcrCurrentPage(pageNumber)}
+                disabled={isOcrExtracting}
+                className="p-1.5 rounded-lg border border-current/15 hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer disabled:opacity-50"
+                title="Re-run OCR for this page"
+              >
+                {isOcrExtracting ? <Loader2 className="w-4 h-4 animate-spin text-amber-500" /> : <Sparkles className="w-4 h-4" />}
+              </button>
+
+              {/* Close Drawer */}
+              <button
+                onClick={() => setIsOcrDrawerOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition cursor-pointer opacity-70 hover:opacity-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Search bar inside drawer */}
+          <div className="px-5 py-2 border-b border-current/10 flex items-center gap-2 bg-black/2 dark:bg-white/2">
+            <Search className="w-3.5 h-3.5 opacity-50" />
+            <input
+              type="text"
+              value={ocrSearchQuery}
+              onChange={(e) => setOcrSearchQuery(e.target.value)}
+              placeholder="Search words in transcribed text..."
+              className="bg-transparent border-none outline-none text-xs w-full placeholder:opacity-50"
+            />
+            {ocrSearchQuery && (
+              <button onClick={() => setOcrSearchQuery('')} className="opacity-50 hover:opacity-100 text-xs">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 overflow-y-auto px-6 py-4 select-text leading-relaxed font-serif text-sm">
+            {isOcrExtracting ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3 text-center">
+                <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+                <p className="text-sm font-medium">Transcribing scanned page with AI Vision...</p>
+                <p className="text-xs opacity-60">High-definition 2.0x offscreen rendering in progress</p>
+              </div>
+            ) : ocrByPage[pageNumber] ? (
+              <div className="space-y-4 max-w-3xl mx-auto select-text">
+                {ocrByPage[pageNumber].split('\n\n').map((para, pIdx) => {
+                  const pageHighlights = highlights.filter(h => h.chapterIndex === pageNumber - 1);
+                  const matched = pageHighlights.filter(h => h.selectedText && para.includes(h.selectedText));
+
+                  return (
+                    <p key={pIdx} className="whitespace-pre-wrap select-text selection:bg-amber-400/40 selection:text-current">
+                      {renderHighlightedParagraph(para, matched, false)}
+                    </p>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-10 text-center max-w-md mx-auto space-y-3">
+                <Eye className="w-8 h-8 mx-auto text-amber-500/80" />
+                <h4 className="font-semibold text-sm">No OCR transcription for Page {pageNumber} yet</h4>
+                <p className="text-xs opacity-70">
+                  Transcribe this page using Gemini 3.8 Multimodal Vision to unlock text selection, highlighting, annotations, dictionary lookup, and read aloud.
+                </p>
+                <button
+                  onClick={() => handleOcrCurrentPage(pageNumber)}
+                  disabled={isOcrExtracting}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold rounded-xl text-xs transition cursor-pointer shadow-md inline-flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Start AI OCR for Page {pageNumber}</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
       </ErrorBoundary>
     </div>

@@ -133,15 +133,19 @@ export interface HabitStats {
   heatMapData: { date: string; minutes: number; level: 0 | 1 | 2 | 3 | 4 }[];
 }
 
+export interface LuminaBackupBook extends Book {
+  rawFileBase64?: string;
+}
+
 export interface LuminaBackup {
   version: number;
   exportedAt: string;
-  books: Book[];
+  books: LuminaBackupBook[];
   highlights: Highlight[];
   bookmarks: Bookmark[];
   shelves: Shelf[];
   readingSessions: ReadingSession[];
-  settings: ReaderSettings;
+  settings: ReaderSettings | null;
 }
 
 export interface ReadingSessionStats {
@@ -192,8 +196,9 @@ export interface ImportQueueItem {
   file: File;
   name: string;
   size: number;
-  format: 'epub' | 'pdf' | 'txt' | 'md' | 'other';
+  format: 'epub' | 'pdf' | 'txt' | 'md' | 'lumina' | 'other';
   status: 'pending' | 'parsing' | 'success' | 'error';
   parsedBook?: Book;
+  parsedBackup?: LuminaBackup;
   errorMessage?: string;
 }

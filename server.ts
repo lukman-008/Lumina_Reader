@@ -62,7 +62,7 @@ READER'S QUESTION:
 Provide a clear, insightful, literary analysis response. Keep it spoiler-free for events that occur beyond the current chapter. Format nicely with markdown.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3.8-flash',
       contents: prompt,
     });
 
@@ -104,7 +104,7 @@ Provide a concise breakdown with:
 Do NOT reveal spoilers beyond what a reader has encountered.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3.8-flash',
       contents: prompt,
     });
 
@@ -145,7 +145,7 @@ Format response with:
 4. **Reflective Question for the Reader**`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3.8-flash',
       contents: prompt,
     });
 
@@ -183,7 +183,7 @@ Provide:
 - **Modern Example Sentence**`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3.8-flash',
       contents: prompt,
     });
 
@@ -218,7 +218,7 @@ app.post('/api/ai/ocr', async (req, res) => {
       "Transcribe all readable text from this book page or image accurately into structured paragraphs. Retain natural headings and flow. Do not add intro/outro commentary, conversational filler, or enclosing backticks—return only the transcribed text.";
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.6-flash',
+      model: 'gemini-3.8-flash',
       contents: [
         {
           inlineData: {

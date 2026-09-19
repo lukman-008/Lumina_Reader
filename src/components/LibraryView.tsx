@@ -1,5 +1,5 @@
 import { formatCompactNumber } from "../utils/format";
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   BookOpen,
   Plus,
@@ -84,21 +84,23 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
   const [isNewShelfModalOpen, setIsNewShelfModalOpen] = useState(false);
   const [newShelfName, setNewShelfName] = useState('');
   const [isBackupModalOpen, setIsBackupModalOpen] = useState(false);
+  const [backupInitialFile, setBackupInitialFile] = useState<File | null>(null);
   const [isHabitsModalOpen, setIsHabitsModalOpen] = useState(false);
   const [isSoundscapeModalOpen, setIsSoundscapeModalOpen] = useState(false);
 
   // Load custom shelves
-  useEffect(() => {
-    const loadShelves = async () => {
-      try {
-        const list = await db.shelves.toArray();
-        setShelves(list);
-      } catch (err) {
-        console.warn('Failed to load shelves:', err);
-      }
-    };
-    loadShelves();
+  const loadShelves = useCallback(async () => {
+    try {
+      const list = await db.shelves.toArray();
+      setShelves(list);
+    } catch (err) {
+      console.warn('Failed to load shelves:', err);
+    }
   }, []);
+
+  useEffect(() => {
+    loadShelves();
+  }, [loadShelves]);
 
   // Filter books based on active tab and search query
   const filteredBooks = useMemo(() => {
@@ -153,6 +155,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
 
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+
+    // Detect if user uploaded a .lumina backup file
+    const luminaFile = Array.from(files).find(
+      (f) => f.name.endsWith('.lumina') || f.name.includes('lumina_library_backup')
+    );
+    if (luminaFile) {
+      setBackupInitialFile(luminaFile);
+      setIsBackupModalOpen(true);
+      return;
+    }
+
     setIsImporting(true);
 
     try {
@@ -1281,8 +1294,15 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
       {/* Backup & Restore Modal */}
       <BackupRestoreModal
         isOpen={isBackupModalOpen}
-        onClose={() => setIsBackupModalOpen(false)}
-        onLibraryChanged={onRefreshBooks}
+        onClose={() => {
+          setIsBackupModalOpen(false);
+          setBackupInitialFile(null);
+        }}
+        onLibraryChanged={() => {
+          onRefreshBooks();
+          loadShelves();
+        }}
+        initialFile={backupInitialFile}
       />
 
       {/* Reading Habits Dashboard */}
