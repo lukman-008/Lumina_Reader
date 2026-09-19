@@ -785,6 +785,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {sortedBooks.map((book) => {
             const progress = book.readingProgress?.percentage || 0;
+            const currentPg = book.readingProgress?.currentPageIndex || 0;
+            const currentCh = book.readingProgress?.currentChapterIndex || 0;
+            const isPdf = book.format === 'pdf';
+            const hasStarted = progress > 0 || (isPdf ? currentPg > 1 : (currentPg > 0 || currentCh > 0)) || !!book.readingProgress?.lastReadTimestamp;
             const estMinutes = estimateReadingTimeMinutes(book.totalWords);
             const isSelected = selectedBookIds.has(book.id);
             const shelfObj = shelves.find((s) => s.id === book.shelfId);
@@ -896,10 +900,14 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   <div className="space-y-2 pt-2 border-t border-slate-800/80">
                     {/* Progress Indicator */}
                     <div className="flex items-center justify-between text-[11px] text-slate-400">
-                      <span>{progress > 0 ? `${progress}% Completed` : 'Not Started'}</span>
                       <span>
-                        {book.format === 'pdf' 
-                          ? 'PDF Document' 
+                        {hasStarted 
+                          ? `${Math.max(1, progress)}% Completed` 
+                          : 'Not Started'}
+                      </span>
+                      <span>
+                        {isPdf 
+                          ? (currentPg > 0 ? `Page ${currentPg}` : 'PDF Document') 
                           : estMinutes >= 60 
                             ? `~${Math.floor(estMinutes / 60)}h ${estMinutes % 60}m` 
                             : `~${estMinutes}m total`}
@@ -907,7 +915,7 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                     </div>
                     <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
                       <div
-                        style={{ width: `${progress}%` }}
+                        style={{ width: `${hasStarted ? Math.max(2, progress) : 0}%` }}
                         className="h-full bg-amber-500 rounded-full transition-all duration-300"
                       />
                     </div>
@@ -917,7 +925,11 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                   <div className="flex flex-wrap gap-2 items-center justify-between pt-1">
                     <span className="text-[11px] text-amber-400 font-semibold group-hover:underline flex items-center gap-1">
                       <BookOpen className="w-3.5 h-3.5" />
-                      <span>{progress > 0 ? 'Resume Reading' : 'Start Reading'}</span>
+                      <span>
+                        {hasStarted 
+                          ? (isPdf && currentPg > 0 ? `Resume (Page ${currentPg})` : 'Resume Reading') 
+                          : 'Start Reading'}
+                      </span>
                     </span>
 
                     <button
@@ -938,6 +950,10 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
         <div className="space-y-2">
           {sortedBooks.map((book) => {
             const progress = book.readingProgress?.percentage || 0;
+            const currentPg = book.readingProgress?.currentPageIndex || 0;
+            const currentCh = book.readingProgress?.currentChapterIndex || 0;
+            const isPdf = book.format === 'pdf';
+            const hasStarted = progress > 0 || (isPdf ? currentPg > 1 : (currentPg > 0 || currentCh > 0)) || !!book.readingProgress?.lastReadTimestamp;
             const estMinutes = estimateReadingTimeMinutes(book.totalWords);
             const isSelected = selectedBookIds.has(book.id);
             const shelfObj = shelves.find((s) => s.id === book.shelfId);
@@ -1018,14 +1034,20 @@ export const LibraryView: React.FC<LibraryViewProps> = ({
                 {/* Center / Right: Progress Bar & Actions */}
                 <div className="flex items-center gap-4 shrink-0">
                   {/* Progress info */}
-                  <div className="w-24 sm:w-32 hidden sm:block">
+                  <div className="w-24 sm:w-36 hidden sm:block">
                     <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                      <span>{progress}%</span>
-                      <span>{progress === 100 ? 'Finished' : progress > 0 ? 'In Progress' : 'Unread'}</span>
+                      <span>{hasStarted ? `${Math.max(1, progress)}%` : '0%'}</span>
+                      <span>
+                        {progress === 100 
+                          ? 'Finished' 
+                          : hasStarted 
+                            ? (isPdf && currentPg > 0 ? `Page ${currentPg}` : 'In Progress') 
+                            : 'Unread'}
+                      </span>
                     </div>
                     <div className="w-full h-1.5 rounded-full bg-slate-800 overflow-hidden">
                       <div
-                        style={{ width: `${progress}%` }}
+                        style={{ width: `${hasStarted ? Math.max(2, progress) : 0}%` }}
                         className="h-full bg-amber-500 rounded-full"
                       />
                     </div>

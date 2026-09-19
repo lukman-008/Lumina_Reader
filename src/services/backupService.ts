@@ -62,13 +62,30 @@ export interface RestoreResult {
   pdfsRestored: number;
 }
 
+export interface ExportResult {
+  url: string;
+  fileName: string;
+  jsonFileName: string;
+  blob: Blob;
+  jsonUrl: string;
+  jsonString: string;
+  file: File;
+  stats: {
+    booksCount: number;
+    highlightsCount: number;
+    bookmarksCount: number;
+    shelvesCount: number;
+    fileSizeBytes: number;
+  };
+}
+
 export class BackupService {
   /**
    * Export entire library state to a self-contained .lumina offline file
    */
   public async exportLibraryBackup(
     onProgress?: (message: string, percent: number) => void
-  ): Promise<void> {
+  ): Promise<ExportResult> {
     onProgress?.('Querying library database...', 10);
     const books = await db.books.toArray();
     const highlights = await db.highlights.toArray();
@@ -145,18 +162,66 @@ export class BackupService {
 
     onProgress?.('Generating downloadable archive...', 95);
     const jsonString = JSON.stringify(backupData, null, 2);
-    const blob = new Blob([jsonString], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
+    // Use application/octet-stream to ensure mobile browsers and device file managers save the file directly
+    const blob = new Blob([jsonString], { type: 'application/octet-stream' });
+    const jsonBlob = new Blob([jsonString], { type: 'application/json' });
     const dateStr = new Date().toISOString().slice(0, 10);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `lumina_library_backup_${dateStr}.lumina`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    const fileName = `lumina_library_backup_${dateStr}.lumina`;
+    const jsonFileName = `lumina_library_backup_${dateStr}.json`;
+    const url = URL.createObjectURL(blob);
+    const jsonUrl = URL.createObjectURL(jsonBlob);
+
+    let fileObj: File;
+    try {
+      fileObj = new File([blob], fileName, { type: 'application/octet-stream' });
+    } catch {
+      fileObj = blob as any;
+    }
+
+    // Trigger auto-download via link
+    try {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.setAttribute('download', fileName);
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (document.body.contains(a)) {
+          document.body.removeChild(a);
+        }
+      }, 150);
+    } catch (e) {
+      console.warn('Auto-click export error:', e);
+    }
+
+    // DO NOT revoke immediately! Keep URL valid for 10 minutes so users can re-download or share on mobile
+    setTimeout(() => {
+      try {
+        URL.revokeObjectURL(url);
+        URL.revokeObjectURL(jsonUrl);
+      } catch (e) {}
+    }, 600000);
 
     onProgress?.('Export completed successfully!', 100);
+
+    return {
+      url,
+      fileName,
+      jsonFileName,
+      blob,
+      jsonUrl,
+      jsonString,
+      file: fileObj,
+      stats: {
+        booksCount: serializedBooks.length,
+        highlightsCount: highlights.length,
+        bookmarksCount: bookmarks.length,
+        shelvesCount: shelves.length,
+        fileSizeBytes: blob.size,
+      },
+    };
   }
 
   /**

@@ -17,9 +17,10 @@ import {
   Sparkles,
   Check,
 } from 'lucide-react';
-import { backupService, type RestoreResult } from '../services/backupService';
+import { backupService, type RestoreResult, type ExportResult } from '../services/backupService';
 import type { LuminaBackup } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
+import { Share2 } from 'lucide-react';
 
 interface BackupRestoreModalProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
   useEscapeKey(isOpen, onClose);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState<{ message: string; percent: number } | null>(null);
+  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
   const [importedBackup, setImportedBackup] = useState<LuminaBackup | null>(null);
   const [importedFileName, setImportedFileName] = useState<string>('');
   const [isRestoring, setIsRestoring] = useState(false);
@@ -83,17 +85,43 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
     setErrorMessage(null);
     setExportProgress({ message: 'Gathering library data...', percent: 5 });
     try {
-      await backupService.exportLibraryBackup((msg, pct) => {
+      const res = await backupService.exportLibraryBackup((msg, pct) => {
         setExportProgress({ message: msg, percent: pct });
       });
-      setTimeout(() => {
-        setExportProgress(null);
-      }, 2500);
+      setExportResult(res);
+      setExportProgress(null);
     } catch (err: any) {
       setErrorMessage('Export failed: ' + (err.message || 'Unknown error'));
       setExportProgress(null);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const handleShareFile = async () => {
+    if (!exportResult) return;
+    try {
+      if (navigator.share && exportResult.file) {
+        if (navigator.canShare && navigator.canShare({ files: [exportResult.file] })) {
+          await navigator.share({
+            title: 'Lumina Library Backup',
+            text: 'Here is my complete Lumina offline book library backup.',
+            files: [exportResult.file],
+          });
+          return;
+        }
+      }
+      // Fallback: trigger anchor download
+      const a = document.createElement('a');
+      a.href = exportResult.url;
+      a.download = exportResult.fileName;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => document.body.removeChild(a), 100);
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.warn('Share error:', e);
+      }
     }
   };
 
@@ -253,6 +281,62 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
                   style={{ width: `${exportProgress.percent}%` }}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Export Completed Card with Direct Mobile Buttons */}
+          {exportResult && (
+            <div className="p-3.5 rounded-xl bg-emerald-950/40 border border-emerald-500/40 space-y-3 animate-in fade-in">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <div>
+                    <span className="text-xs font-semibold text-emerald-200 block">
+                      Backup Archive Ready!
+                    </span>
+                    <span className="text-[11px] text-slate-300 font-mono break-all">
+                      {exportResult.fileName} ({(exportResult.stats.fileSizeBytes / 1024).toFixed(1)} KB)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                {/* Save to Files / Mobile Share */}
+                <button
+                  type="button"
+                  onClick={handleShareFile}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                  title="Save directly to phone's Files app or share via WhatsApp/Drive"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Save to Phone Files / Share</span>
+                </button>
+
+                {/* Direct Download Link */}
+                <a
+                  href={exportResult.url}
+                  download={exportResult.fileName}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Download .lumina</span>
+                </a>
+
+                {/* Alternative .json Download */}
+                <a
+                  href={exportResult.jsonUrl}
+                  download={exportResult.jsonFileName}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 flex items-center gap-1 transition cursor-pointer text-[11px]"
+                  title="Download with standard .json extension if your phone cannot find .lumina files"
+                >
+                  <span>Alternative (.json)</span>
+                </a>
+              </div>
+
+              <p className="text-[10px] text-emerald-300/80 leading-normal">
+                📱 <strong>Mobile Note:</strong> Tap <em>Save to Phone Files</em> to choose your iPhone/iPad &ldquo;Files&rdquo; app or Android &ldquo;Downloads/My Files&rdquo; folder. Both <code className="text-amber-300">.lumina</code> and <code className="text-amber-300">.json</code> can be restored on any device.
+              </p>
             </div>
           )}
         </div>

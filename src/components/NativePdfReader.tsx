@@ -60,8 +60,18 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   targetHighlightId,
   onClearTargetHighlight
 }) => {
+  const initialPage = useMemo(() => {
+    if (book.readingProgress?.currentPageIndex && book.readingProgress.currentPageIndex > 0) {
+      return book.readingProgress.currentPageIndex;
+    }
+    if (book.readingProgress?.currentChapterIndex !== undefined && book.readingProgress.currentChapterIndex >= 0) {
+      return book.readingProgress.currentChapterIndex + 1;
+    }
+    return 1;
+  }, [book.readingProgress]);
+
   const [numPages, setNumPages] = useState<number>(0);
-  const [pageNumber, setPageNumber] = useState<number>(1);
+  const [pageNumber, setPageNumber] = useState<number>(initialPage);
   const [fileData, setFileData] = useState<ArrayBuffer | Blob | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
 
@@ -72,8 +82,63 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
+  const pinchStartDist = useRef<number | null>(null);
+  const pinchStartScale = useRef<number>(1.0);
 
-  const handleSwipeStart = (e: React.TouchEvent) => {
+  // Sync settings.fontSize to PDF scale (16px = 1.0x, scaling dynamically)
+  const prevFontSizeRef = useRef(settings.fontSize);
+  useEffect(() => {
+    if (settings.fontSize && settings.fontSize !== prevFontSizeRef.current) {
+      prevFontSizeRef.current = settings.fontSize;
+      const targetScale = Math.min(3.5, Math.max(0.5, settings.fontSize / 16));
+      setScale(parseFloat(targetScale.toFixed(2)));
+    }
+  }, [settings.fontSize]);
+
+  // Persist reading progress to IndexedDB
+  const saveReadingProgress = useCallback(async (targetPage: number, total: number) => {
+    if (!book.id || total <= 0) return;
+    const percentage = Math.round((targetPage / Math.max(1, total)) * 100);
+    const updatedProgress = {
+      currentChapterIndex: targetPage - 1,
+      currentPageIndex: targetPage,
+      percentage: Math.min(100, Math.max(1, percentage)),
+      lastReadTimestamp: Date.now(),
+    };
+    try {
+      await db.books.update(book.id, { readingProgress: updatedProgress });
+      habitTracker.recordActivity(120);
+    } catch (err) {
+      console.warn('Failed to persist PDF reading progress:', err);
+    }
+  }, [book.id]);
+
+  useEffect(() => {
+    if (numPages > 0) {
+      saveReadingProgress(pageNumber, numPages);
+    }
+  }, [pageNumber, numPages, saveReadingProgress]);
+
+  const handleReturnToLibrary = async () => {
+    if (numPages > 0) {
+      await saveReadingProgress(pageNumber, numPages);
+    }
+    onBackToLibrary();
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      pinchStartDist.current = dist;
+      pinchStartScale.current = scale;
+      touchStartX.current = null;
+      touchStartY.current = null;
+      return;
+    }
+
     // Never trigger page-turn swipes if touch started on navigation bar, toolbars, buttons, sliders, or drawers
     const target = e.target as HTMLElement | null;
     if (target) {
@@ -97,14 +162,32 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
       }
     }
 
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
+    if (e.touches.length === 1) {
+      touchStartX.current = e.touches[0].clientX;
+      touchStartY.current = e.touches[0].clientY;
+    }
   };
 
-  const handleSwipeEnd = (e: React.TouchEvent) => {
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchStartDist.current !== null) {
+      const currentDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const factor = currentDist / pinchStartDist.current;
+      const targetScale = Math.min(3.5, Math.max(0.5, pinchStartScale.current * factor));
+      setScale(parseFloat(targetScale.toFixed(2)));
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (pinchStartDist.current !== null && e.touches.length < 2) {
+      pinchStartDist.current = null;
+    }
+
     if (touchStartX.current === null || touchStartY.current === null) return;
-    const touchEndX = e.changedTouches[0].clientX;
-    const touchEndY = e.changedTouches[0].clientY;
+    const touchEndX = e.changedTouches[0]?.clientX ?? touchStartX.current;
+    const touchEndY = e.changedTouches[0]?.clientY ?? touchStartY.current;
     
     const deltaX = touchEndX - touchStartX.current;
     const deltaY = touchEndY - touchStartY.current;
@@ -419,7 +502,19 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const onDocumentLoadSuccess = async (pdf: any) => {
     setNumPages(pdf.numPages);
     setPdfDoc(pdf);
-    setPdfDoc(pdf);
+    const targetP = initialPage > 1 && initialPage <= pdf.numPages ? initialPage : 1;
+    if (targetP !== 1) {
+      setPageNumber(targetP);
+      if (settings.layoutMode === 'scroll') {
+        setTimeout(() => {
+          const el = pageRefs.current[targetP];
+          if (el && containerRef.current) {
+            el.scrollIntoView({ behavior: 'smooth' });
+          }
+        }, 150);
+      }
+    }
+    saveReadingProgress(targetP, pdf.numPages);
     try {
       const outline = await pdf.getOutline();
       if (outline) setPdfOutline(outline);
@@ -445,6 +540,9 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
         if (el && containerRef.current) {
           el.scrollIntoView({ behavior: 'smooth' });
         }
+      }
+      if (numPages > 0) {
+        saveReadingProgress(newPage, numPages);
       }
       return newPage;
     });
@@ -633,22 +731,66 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
       <div 
         key={`ocr-layer-${pNum}`}
         data-ocr-layer={`page-${pNum}`}
-        className={`absolute inset-0 z-10 overflow-hidden pointer-events-auto select-text font-serif leading-relaxed transition-opacity duration-200 ${
+        className={`absolute inset-0 z-20 pointer-events-auto select-text font-serif leading-relaxed transition-all duration-200 ${
           ocrOverlayMode === 'transparent'
-            ? 'opacity-0 hover:opacity-5 cursor-text'
-            : 'bg-amber-50/92 dark:bg-slate-900/92 text-slate-900 dark:text-slate-100 p-8 cursor-text backdrop-blur-xs shadow-inner'
+            ? 'bg-transparent cursor-text overflow-hidden'
+            : 'bg-amber-50/96 dark:bg-slate-900/96 text-slate-900 dark:text-slate-100 p-6 sm:p-8 cursor-text backdrop-blur-md shadow-inner overflow-y-auto'
         }`}
         style={{
           userSelect: 'text',
           WebkitUserSelect: 'text',
         }}
-        title={ocrOverlayMode === 'transparent' ? "Selectable OCR Layer: Click and drag over text to select, highlight, or read aloud" : "Visible OCR Layer"}
+        title={ocrOverlayMode === 'transparent' ? "Selectable OCR Layer: Click or drag over text to select, highlight, or copy" : "Visible Transcribed OCR Layer"}
       >
-        <div className="w-full h-full flex flex-col justify-start select-text p-6">
+        {/* Floating Quick Action Pill for OCR page */}
+        <div 
+          className="sticky top-2 right-2 ml-auto z-30 mb-2 w-fit flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-950/85 hover:bg-slate-950 text-slate-200 text-[11px] font-sans shadow-lg border border-slate-700/80 backdrop-blur-md select-none pointer-events-auto"
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="font-semibold text-emerald-400">OCR Ready</span>
+          <span className="text-slate-600">|</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOcrOverlayMode(m => m === 'visible' ? 'transparent' : 'visible');
+            }}
+            className="hover:text-amber-300 font-medium transition cursor-pointer text-slate-300"
+          >
+            {ocrOverlayMode === 'visible' ? 'Show PDF Scan' : 'Transcribed View'}
+          </button>
+          <span className="text-slate-600">|</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsOcrDrawerOpen(true);
+            }}
+            className="hover:text-amber-300 transition cursor-pointer text-slate-400 hover:text-slate-200"
+            title="Open OCR Drawer with full tools"
+          >
+            Tools
+          </button>
+        </div>
+
+        <div className="w-full flex flex-col justify-start select-text">
           {ocrText.split('\n\n').map((paragraph, pIdx) => {
             const matched = pageHighlights.filter(h => h.selectedText && paragraph.includes(h.selectedText));
             return (
-              <p key={pIdx} className="mb-4 whitespace-pre-wrap select-text selection:bg-amber-400/40 selection:text-current">
+              <p 
+                key={pIdx} 
+                className={`mb-4 whitespace-pre-wrap select-text selection:bg-amber-400 selection:text-slate-950 ${
+                  ocrOverlayMode === 'transparent' 
+                    ? 'text-transparent hover:text-slate-900/10 dark:hover:text-white/10' 
+                    : 'text-slate-900 dark:text-slate-100 text-sm sm:text-base'
+                }`}
+                style={{
+                  userSelect: 'text',
+                  WebkitUserSelect: 'text',
+                }}
+              >
                 {renderHighlightedParagraph(paragraph, matched, false)}
               </p>
             );
@@ -911,12 +1053,14 @@ return (
           pointer-events: auto !important;
         }
         [data-ocr-layer] p::selection, [data-ocr-layer] span::selection, [data-ocr-layer] *::selection {
-          background: rgba(245, 158, 11, 0.45) !important;
-          color: inherit !important;
+          background: rgba(245, 158, 11, 0.75) !important;
+          color: #020617 !important;
+          text-shadow: none !important;
         }
         [data-ocr-layer] p::-moz-selection, [data-ocr-layer] span::-moz-selection, [data-ocr-layer] *::-moz-selection {
-          background: rgba(245, 158, 11, 0.45) !important;
-          color: inherit !important;
+          background: rgba(245, 158, 11, 0.75) !important;
+          color: #020617 !important;
+          text-shadow: none !important;
         }
       ` }} />
 
@@ -952,7 +1096,7 @@ return (
         >
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             <button
-              onClick={onBackToLibrary}
+              onClick={handleReturnToLibrary}
               className={`p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition flex items-center gap-1.5 text-xs font-medium cursor-pointer ${themeStyle.text}`}
               title="Return to Library"
             >
@@ -1196,8 +1340,9 @@ return (
 
       <div 
         ref={containerRef}
-        onTouchStart={handleSwipeStart}
-        onTouchEnd={handleSwipeEnd}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
         className="flex-1 overflow-y-auto overflow-x-auto w-full flex justify-center pt-8 pb-24 items-start"
         onScroll={(e) => {
           if (!isEditingNoteRef.current) {
@@ -1415,7 +1560,34 @@ return (
           </>
         )}
       </div>
-      
+
+      {/* Floating Zoom Control pill for easy mobile touch zoom */}
+      <div className="fixed bottom-14 sm:bottom-16 right-3 sm:right-5 z-30 flex items-center gap-1 p-1 bg-slate-900/90 text-slate-200 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/80 text-xs select-none">
+        <button
+          type="button"
+          onClick={() => setScale(s => Math.max(0.5, parseFloat((s - 0.15).toFixed(2))))}
+          className="p-1.5 hover:bg-slate-800 active:scale-90 rounded-xl transition cursor-pointer text-slate-400 hover:text-white"
+          title="Zoom Out"
+        >
+          <ZoomOut className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setScale(1.0)}
+          className="px-2 py-1 hover:bg-slate-800 active:scale-95 rounded-xl transition cursor-pointer font-mono text-[11px] text-amber-400 font-semibold"
+          title="Reset Zoom to 100%"
+        >
+          {Math.round(scale * 100)}%
+        </button>
+        <button
+          type="button"
+          onClick={() => setScale(s => Math.min(3.5, parseFloat((s + 0.15).toFixed(2))))}
+          className="p-1.5 hover:bg-slate-800 active:scale-90 rounded-xl transition cursor-pointer text-slate-400 hover:text-white"
+          title="Zoom In"
+        >
+          <ZoomIn className="w-4 h-4" />
+        </button>
+      </div>
 
 
       <SelectionPopup
