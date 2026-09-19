@@ -230,6 +230,8 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const [selectedText, setSelectedText] = useState('');
   const [selectionRects, setSelectionRects] = useState<{ left: number; top: number; width: number; height: number }[]>([]);
   const [selectionOffsets, setSelectionOffsets] = useState<any>(null);
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const isEditingNoteRef = useRef(false);
 
   // Highlight popover state
   const [activeHighlightPopover, setActiveHighlightPopover] = useState<{
@@ -518,20 +520,24 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     });
   };
 
-  const handleCreateHighlight = async (color: string, note?: string) => {
-    if (!selectedText) return;
+  const handleCreateHighlight = async (color: string, note?: string, customText?: string) => {
+    const textToSave = (customText || selectedText || '').trim();
+    if (!textToSave) return;
     
     await db.highlights.put({
       id: `hl-${Date.now()}`,
       bookId: book.id,
       chapterIndex: pageNumber - 1,
-      selectedText,
+      selectedText: textToSave,
       rects: selectionRects.length > 0 ? selectionRects : undefined,
       color: color as any,
       note,
       createdAt: Date.now(),
     });
     setSelectionPosition(null);
+    setSelectedText('');
+    setIsEditingNote(false);
+    isEditingNoteRef.current = false;
     window.getSelection()?.removeAllRanges();
     const all = await db.highlights.where('bookId').equals(book.id).toArray();
     setHighlights(all);
@@ -542,6 +548,13 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const checkSelection = () => {
+      if (isEditingNoteRef.current) return;
+
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT' || activeEl.closest?.('[data-selection-popup], [data-highlight-popover], [role="dialog"]'))) {
+        return;
+      }
+
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed) {
         const text = selection.toString().trim();
@@ -554,6 +567,18 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
               if (clientRects.length > 0) {
                 rect = clientRects[0];
               }
+            }
+
+            const startNode = range.startContainer;
+            const element = startNode.nodeType === Node.ELEMENT_NODE 
+              ? (startNode as HTMLElement) 
+              : startNode.parentElement;
+            
+            if (element?.closest('nav, button, input, select, textarea, [role="dialog"], [data-no-swipe="true"], [data-selection-popup]')) {
+              if (!isEditingNoteRef.current) {
+                setSelectionPosition(null);
+              }
+              return;
             }
             
             let normalizedRects: { left: number; top: number; width: number; height: number }[] = [];
@@ -583,17 +608,21 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
           }
         }
       } else {
-        setSelectionPosition(null);
-        setSelectionRects([]);
+        if (!isEditingNoteRef.current) {
+          setSelectionPosition(null);
+          setSelectionRects([]);
+        }
       }
     };
 
     const handleSelectionEnd = () => {
+      if (isEditingNoteRef.current) return;
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(checkSelection, 30);
     };
 
     const handleSelectionChange = () => {
+      if (isEditingNoteRef.current) return;
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(checkSelection, 40);
     };
@@ -615,15 +644,22 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest('.fixed.z-50') && !target.closest('.pointer-events-auto.mix-blend-multiply')) {
-        setActiveHighlightPopover(null);
-        setTimeout(() => {
-          const selection = window.getSelection();
-          if (!selection || selection.isCollapsed || selection.toString().trim().length === 0) {
-            setSelectionPosition(null);
-          }
-        }, 120);
+      if (target.closest?.('[data-selection-popup], [data-highlight-popover], .fixed.z-50, [role="dialog"]')) {
+        return;
       }
+      if (isEditingNoteRef.current) {
+        return;
+      }
+      if (!target.closest('.pointer-events-auto.mix-blend-multiply')) {
+        setActiveHighlightPopover(null);
+      }
+      setTimeout(() => {
+        if (isEditingNoteRef.current) return;
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || selection.toString().trim().length === 0) {
+          setSelectionPosition(null);
+        }
+      }, 120);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
@@ -941,10 +977,12 @@ return (
         onTouchEnd={handleSwipeEnd}
         className="flex-1 overflow-y-auto overflow-x-auto w-full flex justify-center pt-8 pb-24 items-start"
         onScroll={(e) => {
-          if (activeHighlightPopover) setActiveHighlightPopover(null);
-          const sel = window.getSelection();
-          if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) {
-            if (selectionPosition) setSelectionPosition(null);
+          if (!isEditingNoteRef.current) {
+            if (activeHighlightPopover) setActiveHighlightPopover(null);
+            const sel = window.getSelection();
+            if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) {
+              if (selectionPosition) setSelectionPosition(null);
+            }
           }
           if (settings.layoutMode === 'scroll') {
             const container = e.currentTarget as HTMLDivElement;
@@ -1153,7 +1191,10 @@ return (
         position={selectionPosition}
         selectedText={selectedText}
         onHighlight={handleCreateHighlight}
-        onAddNote={() => {}}
+        onActiveNoteChange={(active) => {
+          setIsEditingNote(active);
+          isEditingNoteRef.current = active;
+        }}
         onReadAloud={() => {
           ttsService.speakText(selectedText, { rate: 1.0 });
           setSelectionPosition(null);
@@ -1162,7 +1203,11 @@ return (
           setIsAIOpen(true);
           setSelectionPosition(null);
         }}
-        onClose={() => setSelectionPosition(null)}
+        onClose={() => {
+          setSelectionPosition(null);
+          setIsEditingNote(false);
+          isEditingNoteRef.current = false;
+        }}
       />
 
       {activeHighlightPopover && (

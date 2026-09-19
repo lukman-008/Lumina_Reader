@@ -171,6 +171,8 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   const [selectionPosition, setSelectionPosition] = useState<{ x: number; y: number; bottom?: number } | null>(null);
   const [selectionOffsets, setSelectionOffsets] = useState<{startOffset: number, endOffset: number, startItemIndex: number} | null>(null);
   const [selectedText, setSelectedText] = useState('');
+  const [isEditingNote, setIsEditingNote] = useState(false);
+  const isEditingNoteRef = useRef(false);
 
   // Active clicked highlight popover state
   const [activeHighlightPopover, setActiveHighlightPopover] = useState<{
@@ -311,9 +313,14 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
 
   useEffect(() => {
     const handleScroll = () => {
-      // Close popups when scrolling
-      if (activeHighlightPopover) setActiveHighlightPopover(null);
-      if (selectionPosition) setSelectionPosition(null);
+      // Close popups when scrolling only if not actively composing note
+      if (!isEditingNoteRef.current) {
+        if (activeHighlightPopover) setActiveHighlightPopover(null);
+        const sel = window.getSelection();
+        if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) {
+          if (selectionPosition) setSelectionPosition(null);
+        }
+      }
 
       // Only update reading progress in scroll mode
       if (!contentAreaRef.current || settings.layoutMode !== 'scroll') return;
@@ -559,12 +566,20 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
     const checkSelection = () => {
+      // If currently writing a note in SelectionPopup, do not wipe selection or reposition
+      if (isEditingNoteRef.current) return;
+
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'TEXTAREA' || activeEl.tagName === 'INPUT' || activeEl.closest?.('[data-selection-popup], [data-highlight-popover], [role="dialog"]'))) {
+        return;
+      }
+
       const selection = window.getSelection();
       if (selection && !selection.isCollapsed && selection.toString().trim().length > 0) {
         try {
           const text = selection.toString().trim();
           if (!text) {
-            setSelectionPosition(null);
+            if (!isEditingNoteRef.current) setSelectionPosition(null);
             return;
           }
 
@@ -577,14 +592,16 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
             }
           }
 
-          // Do not show popup if user selected inside buttons, inputs, or navigation bars
+          // Do not show popup if user selected inside buttons, inputs, navigation bars or the popup itself
           const startNode = range.startContainer;
           const element = startNode.nodeType === Node.ELEMENT_NODE 
             ? (startNode as HTMLElement) 
             : startNode.parentElement;
             
-          if (element?.closest('nav, button, input, select, textarea, [role="dialog"], [data-no-swipe="true"]')) {
-            setSelectionPosition(null);
+          if (element?.closest('nav, button, input, select, textarea, [role="dialog"], [data-no-swipe="true"], [data-selection-popup]')) {
+            if (!isEditingNoteRef.current) {
+              setSelectionPosition(null);
+            }
             return;
           }
 
@@ -622,18 +639,22 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         }
       } else {
         // Selection cleared or collapsed
-        setSelectionPosition(null);
-        setSelectedText('');
-        setSelectionOffsets(null);
+        if (!isEditingNoteRef.current) {
+          setSelectionPosition(null);
+          setSelectedText('');
+          setSelectionOffsets(null);
+        }
       }
     };
 
     const handleSelectionEnd = () => {
+      if (isEditingNoteRef.current) return;
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(checkSelection, 30);
     };
 
     const handleSelectionChange = () => {
+      if (isEditingNoteRef.current) return;
       if (debounceTimer) clearTimeout(debounceTimer);
       debounceTimer = setTimeout(checkSelection, 50);
     };
@@ -664,17 +685,22 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      if (!target.closest('.fixed.z-50')) {
-        if (!target.closest('mark')) {
-          setActiveHighlightPopover(null);
-        }
-        setTimeout(() => {
-          const selection = window.getSelection();
-          if (!selection || selection.isCollapsed || selection.toString().trim().length === 0) {
-            setSelectionPosition(null);
-          }
-        }, 80);
+      if (target.closest?.('[data-selection-popup], [data-highlight-popover], .fixed.z-50, [role="dialog"]')) {
+        return;
       }
+      if (isEditingNoteRef.current) {
+        return;
+      }
+      if (!target.closest('mark')) {
+        setActiveHighlightPopover(null);
+      }
+      setTimeout(() => {
+        if (isEditingNoteRef.current) return;
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed || selection.toString().trim().length === 0) {
+          setSelectionPosition(null);
+        }
+      }, 80);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
@@ -683,14 +709,15 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   }, []);
 
   // Create highlight
-  const handleCreateHighlight = async (color: Highlight['color'], note?: string) => {
-    if (!selectedText) return;
+  const handleCreateHighlight = async (color: Highlight['color'], note?: string, customText?: string) => {
+    const textToSave = (customText || selectedText || '').trim();
+    if (!textToSave) return;
 
-    const words = selectedText.trim().split(/\s+/).filter(Boolean).length;
+    const words = textToSave.split(/\s+/).filter(Boolean).length;
     let scope: Highlight['scope'] = 'word';
-    if (words > 25 || selectedText.includes('\n\n')) {
+    if (words > 25 || textToSave.includes('\n\n')) {
       scope = 'paragraph';
-    } else if (words > 2 || selectedText.includes('.')) {
+    } else if (words > 2 || textToSave.includes('.')) {
       scope = 'line';
     }
 
@@ -698,7 +725,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       id: 'hl-' + Date.now(),
       bookId: book.id,
       chapterIndex: currentChapterIndex,
-      selectedText,
+      selectedText: textToSave,
       startItemIndex: selectionOffsets?.startItemIndex,
       startOffset: selectionOffsets?.startOffset,
       endOffset: selectionOffsets?.endOffset,
@@ -712,6 +739,9 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     await db.highlights.put(newHighlight);
     setHighlights((prev) => [...prev, newHighlight]);
     setSelectionPosition(null);
+    setSelectedText('');
+    setIsEditingNote(false);
+    isEditingNoteRef.current = false;
     window.getSelection()?.removeAllRanges();
   };
 
@@ -1325,10 +1355,17 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         position={selectionPosition}
         selectedText={selectedText}
         onHighlight={handleCreateHighlight}
-        onAddNote={() => {}}
+        onActiveNoteChange={(active) => {
+          setIsEditingNote(active);
+          isEditingNoteRef.current = active;
+        }}
         onReadAloud={() => startTTS(selectedText)}
         onAskAI={() => setIsAIOpen(true)}
-        onClose={() => setSelectionPosition(null)}
+        onClose={() => {
+          setSelectionPosition(null);
+          setIsEditingNote(false);
+          isEditingNoteRef.current = false;
+        }}
       />
 
       {/* Highlight Click / Edit Popover */}
