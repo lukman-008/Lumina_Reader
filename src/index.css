@@ -88,19 +88,43 @@ body {
 
 
 /* Fix react-pdf text layer against Tailwind CSS resets */
-.react-pdf__Page__textContent {
+.react-pdf__Page {
+  position: relative !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+
+.react-pdf__Page__canvas {
+  display: block !important;
+  pointer-events: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.react-pdf__Page__textContent,
+.textLayer {
   border-radius: 0;
+  z-index: 5 !important;
+  pointer-events: auto !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
 .react-pdf__Page__textContent span,
 .react-pdf__Page__textContent span::selection,
-.react-pdf__Page__textContent span::-moz-selection {
+.react-pdf__Page__textContent span::-moz-selection,
+.textLayer :is(span, br) {
   color: transparent !important;
+  pointer-events: auto !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
 }
-.react-pdf__Page__textContent span::selection {
-  background: rgba(0, 102, 255, 0.25) !important;
+.react-pdf__Page__textContent span::selection,
+.textLayer :is(span, br)::selection {
+  background: rgba(0, 102, 255, 0.3) !important;
 }
-.react-pdf__Page__textContent span::-moz-selection {
-  background: rgba(0, 102, 255, 0.25) !important;
+.react-pdf__Page__textContent span::-moz-selection,
+.textLayer :is(span, br)::-moz-selection {
+  background: rgba(0, 102, 255, 0.3) !important;
 }
 /* Copyright 2014 Mozilla Foundation
  *
@@ -144,7 +168,7 @@ body {
   forced-color-adjust: none;
   transform-origin: 0 0;
   caret-color: CanvasText;
-  z-index: 0;
+  z-index: 5 !important;
 
   /* We multiply the font size by --min-font-size, and then scale the text
    * elements by 1/--min-font-size. This allows us to effectively ignore the

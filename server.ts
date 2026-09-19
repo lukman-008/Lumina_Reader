@@ -194,6 +194,51 @@ Provide:
   }
 });
 
+// AI: Optical Character Recognition (OCR) for Images and Scanned Pages
+app.post('/api/ai/ocr', async (req, res) => {
+  try {
+    const { imageBase64, prompt: customPrompt } = req.body;
+    if (!imageBase64) {
+      return res.status(400).json({ error: 'Image data is required for OCR.' });
+    }
+
+    const ai = getAIClient();
+    if (!ai) {
+      return res.status(503).json({
+        error: 'GEMINI_API_KEY is not configured in the workspace environment.',
+        offlineFallback: true,
+      });
+    }
+
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+    const mimeMatch = imageBase64.match(/^data:(image\/\w+);base64,/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+
+    const promptText = customPrompt || 
+      "Transcribe all readable text from this book page or image accurately into structured paragraphs. Retain natural headings and flow. Do not add intro/outro commentary, conversational filler, or enclosing backticks—return only the transcribed text.";
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.6-flash',
+      contents: [
+        {
+          inlineData: {
+            mimeType,
+            data: base64Data,
+          },
+        },
+        {
+          text: promptText,
+        },
+      ],
+    });
+
+    res.json({ text: response.text || '' });
+  } catch (error: any) {
+    console.error('AI OCR Error:', error);
+    res.status(500).json({ error: error.message || 'Failed to extract text from image.' });
+  }
+});
+
 // Vite middleware or production static serving
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {

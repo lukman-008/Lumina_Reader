@@ -121,6 +121,30 @@ class AIService {
       };
     }
   }
+
+  public async extractTextFromImage(imageBase64: string, customPrompt?: string): Promise<{ text: string; isOfflineFallback?: boolean }> {
+    try {
+      const res = await fetch('/api/ai/ocr', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64, prompt: customPrompt }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || `Server responded with ${res.status}`);
+      }
+
+      const data = await res.json();
+      return { text: data.text || '' };
+    } catch (err: any) {
+      console.warn('AI OCR API error or offline mode:', err.message);
+      return {
+        text: 'OCR extraction requires an active server connection with GEMINI_API_KEY configured.',
+        isOfflineFallback: true,
+      };
+    }
+  }
 }
 
 export const aiService = new AIService();

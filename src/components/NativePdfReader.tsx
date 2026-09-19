@@ -5,12 +5,14 @@ import { Book, ReaderSettings, Highlight } from '../types';
 import { db } from '../services/db';
 import { habitTracker } from '../services/habitTracker';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Maximize2, Minimize2, Settings, List, X, Square, Columns2, ScrollText, Moon, Sun, Palette, Eye, CloudRain, Flame, Volume2, Zap, Sliders, BookOpen, Highlighter, Sparkles } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Maximize2, Minimize2, Settings, List, X, Square, Columns2, ScrollText, Moon, Sun, Palette, Eye, CloudRain, Flame, Volume2, Zap, Sliders, BookOpen, Highlighter, Sparkles, Loader2 } from 'lucide-react';
 import { SelectionPopup } from './SelectionPopup';
 import { HighlightPopover } from './HighlightPopover';
 import { AIAssistantDrawer } from './AIAssistantDrawer';
 import { AnnotationsDrawer } from './ReaderDrawers';
 import { ttsService } from '../services/ttsService';
+import { aiService } from '../services/aiService';
+import { ImageModal } from './ImageModal';
 import { SoundscapeModal } from './SoundscapeModal';
 import { ReadingHabitsDashboard } from './ReadingHabitsDashboard';
 import { TTSAudioBar } from './TTSAudioBar';
@@ -241,6 +243,46 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const [isAnnotationsDrawerOpen, setIsAnnotationsDrawerOpen] = useState(false);
   const [isAIOpen, setIsAIOpen] = useState(false);
   const [pendingHighlightScrollId, setPendingHighlightScrollId] = useState<string | null>(null);
+  const [isOcrExtracting, setIsOcrExtracting] = useState(false);
+  const [activeImageModal, setActiveImageModal] = useState<{ src: string; alt?: string } | null>(null);
+
+  const handleOcrCurrentPage = async () => {
+    setIsOcrExtracting(true);
+    try {
+      let targetCanvas: HTMLCanvasElement | null = null;
+      if (containerRef.current) {
+        const pageEl = containerRef.current.querySelector(`[data-page-number="${pageNumber}"]`);
+        if (pageEl) {
+          targetCanvas = pageEl.querySelector('canvas');
+        }
+        if (!targetCanvas) {
+          targetCanvas = containerRef.current.querySelector('canvas');
+        }
+      }
+
+      if (!targetCanvas) {
+        throw new Error("Page canvas not ready yet. Please wait a moment for the page to render.");
+      }
+
+      const imageBase64 = targetCanvas.toDataURL('image/jpeg', 0.92);
+      const res = await aiService.extractTextFromImage(
+        imageBase64,
+        "Transcribe all readable text from this scanned book page accurately. Maintain original paragraphs and line structure. Do not include markdown code fences or conversational filler—output only the transcribed text."
+      );
+
+      if (res.text && res.text.trim().length > 0) {
+        setExtractedText(res.text.trim());
+        setPdfViewMode('reader');
+      } else {
+        setExtractedText("No readable text could be recognized on this page.");
+      }
+    } catch (err: any) {
+      console.error('OCR Error:', err);
+      setExtractedText(`OCR Failed: ${err.message || 'Unable to extract text from page image'}`);
+    } finally {
+      setIsOcrExtracting(false);
+    }
+  };
 
   useEffect(() => {
     if (pendingHighlightScrollId && pdfViewMode === 'reader') {
@@ -515,7 +557,9 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
             }
             
             let normalizedRects: { left: number; top: number; width: number; height: number }[] = [];
-            const pageContainer = (selection.anchorNode as Node)?.parentElement?.closest('.react-pdf__Page');
+            const anchorParent = (selection.anchorNode as Node)?.parentElement;
+            const focusParent = (selection.focusNode as Node)?.parentElement;
+            const pageContainer = anchorParent?.closest('.react-pdf__Page') || focusParent?.closest('.react-pdf__Page') || (range.commonAncestorContainer as HTMLElement)?.closest?.('.react-pdf__Page');
             if (pageContainer) {
                const pageRect = pageContainer.getBoundingClientRect();
                const rects = Array.from(range.getClientRects());
@@ -551,7 +595,7 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
 
     const handleSelectionChange = () => {
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(checkSelection, 50);
+      debounceTimer = setTimeout(checkSelection, 40);
     };
 
     document.addEventListener('mouseup', handleSelectionEnd);
@@ -569,23 +613,21 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
 
   // Close popup if clicking outside
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+    const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('.fixed.z-50') && !target.closest('.pointer-events-auto.mix-blend-multiply')) {
         setActiveHighlightPopover(null);
         setTimeout(() => {
           const selection = window.getSelection();
-          if (!selection || selection.toString().trim().length === 0) {
+          if (!selection || selection.isCollapsed || selection.toString().trim().length === 0) {
             setSelectionPosition(null);
           }
         }, 120);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
     };
   }, []);
 
@@ -595,6 +637,20 @@ return (
       
 
       <style dangerouslySetInnerHTML={{ __html: `
+        .react-pdf__Page {
+          position: relative !important;
+          user-select: text !important;
+          -webkit-user-select: text !important;
+        }
+        .react-pdf__Page__canvas {
+          display: block !important;
+          margin: 0 auto !important;
+          opacity: 1 !important;
+          visibility: visible !important;
+          pointer-events: none !important;
+          user-select: none !important;
+          -webkit-user-select: none !important;
+        }
         .react-pdf__Page__textContent, .textLayer {
           color-scheme: only light;
           position: absolute;
@@ -607,8 +663,11 @@ return (
           forced-color-adjust: none;
           transform-origin: 0 0;
           caret-color: CanvasText;
-          z-index: 0;
+          z-index: 5 !important;
           border-radius: 0;
+          pointer-events: auto !important;
+          user-select: text !important;
+          -webkit-user-select: text !important;
         }
         .react-pdf__Page__textContent span, .textLayer :is(span, br) {
           color: transparent !important;
@@ -617,20 +676,17 @@ return (
           cursor: text;
           margin: 0;
           transform-origin: 0 0;
+          pointer-events: auto !important;
+          user-select: text !important;
+          -webkit-user-select: text !important;
         }
         .react-pdf__Page__textContent span::selection, .textLayer :is(span, br)::selection {
-          background: rgba(0, 102, 255, 0.25) !important;
+          background: rgba(0, 102, 255, 0.3) !important;
           color: transparent !important;
         }
         .react-pdf__Page__textContent span::-moz-selection, .textLayer :is(span, br)::-moz-selection {
-          background: rgba(0, 102, 255, 0.25) !important;
+          background: rgba(0, 102, 255, 0.3) !important;
           color: transparent !important;
-        }
-        .react-pdf__Page__canvas {
-          display: block !important;
-          margin: 0 auto !important;
-          opacity: 1 !important;
-          visibility: visible !important;
         }
       ` }} />
 
@@ -777,6 +833,20 @@ return (
               {pdfViewMode === 'native' ? <BookOpen className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               <span className="hidden sm:inline text-xs font-medium">{pdfViewMode === 'native' ? 'Reader' : 'Native'}</span>
             </button>
+
+            <button
+              onClick={handleOcrCurrentPage}
+              disabled={isOcrExtracting}
+              className="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-xs font-medium transition cursor-pointer disabled:opacity-50"
+              title="Extract Text from Scanned Page / Image with AI OCR"
+            >
+              {isOcrExtracting ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-500" />
+              ) : (
+                <Sparkles className="w-3.5 h-3.5" />
+              )}
+              <span className="hidden sm:inline">AI OCR</span>
+            </button>
             
             <div className="w-px h-6 bg-slate-500/30 mx-1"></div>
 
@@ -838,23 +908,31 @@ return (
         </nav>
       </div>
 
-      {/* Click zones for desktop page turning */}
+      {/* Floating page turning buttons (pointer-events-none on container so margins stay selectable) */}
       <div 
-        onClick={() => changePage(-1)} 
-        className="absolute left-0 top-12 bottom-0 w-16 md:w-28 z-10 cursor-w-resize hover:bg-black/[0.015] dark:hover:bg-white/[0.015] transition flex items-center justify-start pl-3 opacity-0 hover:opacity-100"
+        className="hidden md:flex pointer-events-none absolute left-0 top-12 bottom-0 w-16 md:w-24 z-10 items-center justify-start pl-3"
       >
-        <div className="p-2 rounded-full bg-black/10 dark:bg-white/10 backdrop-blur-xs">
-          <ChevronLeft className="w-5 h-5 opacity-70" />
-        </div>
+        <button
+          type="button"
+          onClick={() => changePage(-1)} 
+          className="pointer-events-auto p-2 rounded-full bg-black/20 dark:bg-white/20 hover:bg-black/35 dark:hover:bg-white/35 backdrop-blur-xs transition cursor-pointer opacity-30 hover:opacity-100 shadow-md"
+          title="Previous Page (Left Arrow)"
+        >
+          <ChevronLeft className="w-5 h-5 opacity-80" />
+        </button>
       </div>
       
       <div 
-        onClick={() => changePage(1)} 
-        className="absolute right-0 top-12 bottom-0 w-16 md:w-28 z-10 cursor-e-resize hover:bg-black/[0.015] dark:hover:bg-white/[0.015] transition flex items-center justify-end pr-3 opacity-0 hover:opacity-100"
+        className="hidden md:flex pointer-events-none absolute right-0 top-12 bottom-0 w-16 md:w-24 z-10 items-center justify-end pr-3"
       >
-        <div className="p-2 rounded-full bg-black/10 dark:bg-white/10 backdrop-blur-xs">
-          <ChevronRight className="w-5 h-5 opacity-70" />
-        </div>
+        <button
+          type="button"
+          onClick={() => changePage(1)} 
+          className="pointer-events-auto p-2 rounded-full bg-black/20 dark:bg-white/20 hover:bg-black/35 dark:hover:bg-white/35 backdrop-blur-xs transition cursor-pointer opacity-30 hover:opacity-100 shadow-md"
+          title="Next Page (Right Arrow)"
+        >
+          <ChevronRight className="w-5 h-5 opacity-80" />
+        </button>
       </div>
 
       <div 
@@ -864,7 +942,10 @@ return (
         className="flex-1 overflow-y-auto overflow-x-auto w-full flex justify-center pt-8 pb-24 items-start"
         onScroll={(e) => {
           if (activeHighlightPopover) setActiveHighlightPopover(null);
-          if (selectionPosition) setSelectionPosition(null);
+          const sel = window.getSelection();
+          if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) {
+            if (selectionPosition) setSelectionPosition(null);
+          }
           if (settings.layoutMode === 'scroll') {
             const container = e.currentTarget as HTMLDivElement;
             const pageElements = container.querySelectorAll('[data-page-number]');
@@ -941,11 +1022,26 @@ return (
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col items-center justify-center h-64 opacity-50 text-center">
-                   <Eye className="w-12 h-12 mb-4 opacity-30" />
-                   <p>No text could be extracted from this page.</p>
-                   <p className="text-sm mt-2">This may be a scanned image without OCR text layer.</p>
-                   <button onClick={() => setPdfViewMode('native')} className="mt-4 px-4 py-2 bg-black/10 rounded-md text-sm hover:bg-black/20 transition cursor-pointer">Return to Native View</button>
+                <div className="flex flex-col items-center justify-center min-h-64 opacity-95 text-center max-w-md mx-auto p-6 rounded-2xl bg-black/5 dark:bg-white/5 border border-current/10">
+                   <Eye className="w-10 h-10 mb-3 text-amber-500/80" />
+                   <h3 className="font-semibold text-base mb-1">Scanned Page or Image</h3>
+                   <p className="text-xs text-current/70 mb-4">No embedded digital text was found on this PDF page. Use AI OCR to transcribe the page and make text selectable, readable, and highlightable.</p>
+                   <div className="flex flex-wrap gap-2 justify-center">
+                     <button 
+                       onClick={handleOcrCurrentPage} 
+                       disabled={isOcrExtracting}
+                       className="flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-slate-950 font-medium rounded-xl text-xs hover:bg-amber-400 active:scale-95 transition cursor-pointer shadow-md disabled:opacity-50"
+                     >
+                       {isOcrExtracting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                       <span>{isOcrExtracting ? 'Transcribing...' : 'Extract Text with AI OCR'}</span>
+                     </button>
+                     <button 
+                       onClick={() => setPdfViewMode('native')} 
+                       className="px-3.5 py-2 bg-black/10 dark:bg-white/10 rounded-xl text-xs hover:bg-black/20 dark:hover:bg-white/20 transition cursor-pointer"
+                     >
+                       Return to Native View
+                     </button>
+                   </div>
                 </div>
               )}
             </div>
@@ -1205,6 +1301,18 @@ return (
         text={selectedText || "Please highlight text to use RSVP Speed Reader in PDF mode."}
         chapterTitle={book.title}
       />
+
+      {/* Interactive Image Lightbox & OCR Modal */}
+      {activeImageModal && (
+        <ImageModal
+          isOpen={Boolean(activeImageModal)}
+          src={activeImageModal.src}
+          alt={activeImageModal.alt}
+          bookId={book.id}
+          chapterIndex={pageNumber - 1}
+          onClose={() => setActiveImageModal(null)}
+        />
+      )}
       </ErrorBoundary>
     </div>
   );

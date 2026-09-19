@@ -36,6 +36,7 @@ import { RSVPModal } from './RSVPModal';
 import { SoundscapeModal } from './SoundscapeModal';
 import { ReadingHabitsDashboard } from './ReadingHabitsDashboard';
 import { NativePdfReader } from './NativePdfReader';
+import { ImageModal } from './ImageModal';
 
 interface ReaderViewProps {
   book: Book;
@@ -176,6 +177,9 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     highlight: Highlight;
     position: { x: number; y: number };
   } | null>(null);
+
+  // Active clicked image popup / lightbox modal state
+  const [activeImageModal, setActiveImageModal] = useState<{ src: string; alt?: string } | null>(null);
 
   // TTS current sentence state
   const [ttsCurrentSentence, setTtsCurrentSentence] = useState('');
@@ -932,13 +936,30 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     // 1. Markdown Images
     const imgMatch = p.text.match(/^!\[(.*?)\]\((.*?)\)$/);
     if (imgMatch) {
+      const altText = imgMatch[1] || 'Book illustration';
+      const imgSrc = imgMatch[2];
       return (
-        <div key={idx} className="my-8 flex justify-center w-full">
-          <img 
-            src={imgMatch[2]} 
-            alt={imgMatch[1]} 
-            className="max-w-full max-h-[60dvh] object-contain rounded-xl shadow-lg border border-slate-700/50 bg-slate-800/50 p-1"
-          />
+        <div key={idx} className="my-8 flex flex-col items-center justify-center w-full group">
+          <div 
+            onClick={() => setActiveImageModal({ src: imgSrc, alt: altText })}
+            className="relative overflow-hidden rounded-xl shadow-lg border border-slate-700/50 bg-slate-800/50 p-1 cursor-zoom-in group/img transition-all hover:border-amber-500/50 hover:shadow-xl hover:scale-[1.01] active:scale-[0.99]"
+            title="Click to zoom image and extract text with OCR"
+          >
+            <img 
+              src={imgSrc} 
+              alt={altText} 
+              className="max-w-full max-h-[60dvh] object-contain rounded-lg"
+            />
+            <div className="absolute bottom-2 right-2 px-2 py-1 rounded-lg bg-black/75 backdrop-blur-md text-[10px] text-slate-200 font-medium opacity-0 group-hover/img:opacity-100 transition flex items-center gap-1 border border-white/10">
+              <Maximize2 className="w-3 h-3 text-amber-400" />
+              <span>Tap to Zoom / OCR</span>
+            </div>
+          </div>
+          {altText && altText !== 'Book illustration' && (
+            <p className="mt-2 text-xs text-slate-400 text-center italic max-w-lg">
+              {altText}
+            </p>
+          )}
         </div>
       );
     }
@@ -1332,6 +1353,18 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
         currentSentence={ttsCurrentSentence}
         onClose={() => setIsTTSOpen(false)}
       />
+
+      {/* Interactive Image Lightbox & OCR Modal */}
+      {activeImageModal && (
+        <ImageModal
+          isOpen={Boolean(activeImageModal)}
+          src={activeImageModal.src}
+          alt={activeImageModal.alt}
+          bookId={book.id}
+          chapterIndex={currentChapterIndex}
+          onClose={() => setActiveImageModal(null)}
+        />
+      )}
 
       {/* Spotlight Search in Book Modal */}
       {isSearchOpen && (
