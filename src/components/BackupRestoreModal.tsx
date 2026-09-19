@@ -16,11 +16,16 @@ import {
   Settings,
   Sparkles,
   Check,
+  Share2,
+  Copy,
+  Smartphone,
+  FolderDown,
+  ClipboardPaste,
+  HelpCircle,
 } from 'lucide-react';
 import { backupService, type RestoreResult, type ExportResult } from '../services/backupService';
 import type { LuminaBackup } from '../types';
 import { useEscapeKey } from '../hooks/useEscapeKey';
-import { Share2 } from 'lucide-react';
 
 interface BackupRestoreModalProps {
   isOpen: boolean;
@@ -46,6 +51,13 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
   const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const [copiedBackup, setCopiedBackup] = useState(false);
+  const [nativeSaved, setNativeSaved] = useState<string | null>(null);
+  const [restoreMethod, setRestoreMethod] = useState<'file' | 'paste'>('file');
+  const [pastedJson, setPastedJson] = useState('');
+  const [isVerifyingPaste, setIsVerifyingPaste] = useState(false);
+
+  const hasFileSystemAccess = typeof window !== 'undefined' && 'showSaveFilePicker' in window;
 
   useEffect(() => {
     if (isOpen) {
@@ -101,27 +113,119 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
   const handleShareFile = async () => {
     if (!exportResult) return;
     try {
+      // 1. Try sharing jsonFile first because Android OS natively registers application/json
+      if (navigator.share && exportResult.jsonFile) {
+        if (navigator.canShare && navigator.canShare({ files: [exportResult.jsonFile] })) {
+          await navigator.share({
+            title: 'Lumina Library Backup',
+            text: 'Here is my complete Lumina offline book library backup archive.',
+            files: [exportResult.jsonFile],
+          });
+          return;
+        }
+      }
+
+      // 2. Try sharing standard .lumina file
       if (navigator.share && exportResult.file) {
         if (navigator.canShare && navigator.canShare({ files: [exportResult.file] })) {
           await navigator.share({
             title: 'Lumina Library Backup',
-            text: 'Here is my complete Lumina offline book library backup.',
+            text: 'Here is my complete Lumina offline book library backup archive.',
             files: [exportResult.file],
           });
           return;
         }
       }
-      // Fallback: trigger anchor download
-      const a = document.createElement('a');
-      a.href = exportResult.url;
-      a.download = exportResult.fileName;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => document.body.removeChild(a), 100);
+
+      // 3. In Android WebViews/APKs where file sharing is disabled, share text data!
+      // This immediately triggers the Android system share sheet with Google Drive, Gmail, Keep, WhatsApp, Files, etc.
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Lumina Library Backup',
+          text: exportResult.jsonString,
+        });
+        return;
+      }
+
+      // 4. Fallback: direct download link with data URL fallback
+      triggerDirectDownload(exportResult.fileName, exportResult.url, exportResult.dataUrl);
     } catch (e: any) {
       if (e.name !== 'AbortError') {
-        console.warn('Share error:', e);
+        console.warn('Share error, attempting clipboard copy fallback:', e);
+        await handleCopyBackup();
       }
+    }
+  };
+
+  const triggerDirectDownload = (fileName: string, blobUrl: string, dataUrl: string) => {
+    try {
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = fileName;
+      a.setAttribute('download', fileName);
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (document.body.contains(a)) document.body.removeChild(a);
+      }, 150);
+    } catch {
+      // Direct data URL fallback
+      try {
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          if (document.body.contains(a)) document.body.removeChild(a);
+        }, 150);
+      } catch (err) {
+        console.error('Direct download failed:', err);
+      }
+    }
+  };
+
+  const handleNativeSave = async (isLumina: boolean = true) => {
+    if (!exportResult) return;
+    try {
+      const fileName = isLumina ? exportResult.fileName : exportResult.jsonFileName;
+      const success = await backupService.saveViaNativePicker(fileName, exportResult.jsonString);
+      if (success) {
+        setNativeSaved(fileName);
+        setTimeout(() => setNativeSaved(null), 4000);
+      }
+    } catch (err: any) {
+      setErrorMessage('Could not save via system file dialog: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleCopyBackup = async () => {
+    if (!exportResult) return;
+    const ok = await backupService.copyToClipboard(exportResult.jsonString);
+    if (ok) {
+      setCopiedBackup(true);
+      setTimeout(() => setCopiedBackup(false), 3000);
+    } else {
+      setErrorMessage('Could not copy to clipboard. Please use one of the download buttons.');
+    }
+  };
+
+  const handleVerifyPastedData = async () => {
+    if (!pastedJson.trim()) {
+      setErrorMessage('Please paste your Lumina backup JSON content first.');
+      return;
+    }
+    setIsVerifyingPaste(true);
+    setErrorMessage(null);
+    try {
+      const parsed = await backupService.parseBackupFile(pastedJson.trim());
+      setImportedBackup(parsed);
+      setImportedFileName('pasted_clipboard_backup.lumina');
+    } catch (err: any) {
+      setErrorMessage('Invalid backup format: ' + (err.message || 'Please check that the pasted text is complete.'));
+    } finally {
+      setIsVerifyingPaste(false);
     }
   };
 
@@ -302,79 +406,180 @@ export const BackupRestoreModal: React.FC<BackupRestoreModalProps> = ({
               </div>
 
               <div className="flex flex-wrap gap-2 pt-1">
-                {/* Save to Files / Mobile Share */}
+                {/* Save to Phone Files / Mobile Share */}
                 <button
                   type="button"
                   onClick={handleShareFile}
-                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-                  title="Save directly to phone's Files app or share via WhatsApp/Drive"
+                  className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                  title="Save directly to phone's Files app, Downloads, or share via WhatsApp/Google Drive"
                 >
-                  <Share2 className="w-3.5 h-3.5" />
+                  <Smartphone className="w-3.5 h-3.5" />
                   <span>Save to Phone Files / Share</span>
                 </button>
 
-                {/* Direct Download Link */}
-                <a
-                  href={exportResult.url}
-                  download={exportResult.fileName}
+                {/* System File Picker for Desktop .EXE / Electron / Chrome */}
+                {hasFileSystemAccess && (
+                  <button
+                    type="button"
+                    onClick={() => handleNativeSave(true)}
+                    className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
+                    title="Open native Windows/macOS/Linux Save File Dialog"
+                  >
+                    <FolderDown className="w-3.5 h-3.5 text-sky-400" />
+                    <span>System Save Dialog (Save As...)</span>
+                  </button>
+                )}
+
+                {/* Direct Download .lumina */}
+                <button
+                  type="button"
+                  onClick={() => triggerDirectDownload(exportResult.fileName, exportResult.url, exportResult.dataUrl)}
                   className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-medium border border-slate-700 flex items-center gap-1.5 transition cursor-pointer"
+                  title="Download self-contained .lumina archive"
                 >
                   <Download className="w-3.5 h-3.5 text-emerald-400" />
                   <span>Download .lumina</span>
-                </a>
+                </button>
 
                 {/* Alternative .json Download */}
-                <a
-                  href={exportResult.jsonUrl}
-                  download={exportResult.jsonFileName}
+                <button
+                  type="button"
+                  onClick={() => triggerDirectDownload(exportResult.jsonFileName, exportResult.jsonUrl, exportResult.dataUrl)}
                   className="px-2.5 py-1.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 flex items-center gap-1 transition cursor-pointer text-[11px]"
-                  title="Download with standard .json extension if your phone cannot find .lumina files"
+                  title="Download with standard .json extension if Android cannot recognize .lumina"
                 >
-                  <span>Alternative (.json)</span>
-                </a>
+                  <span>Download (.json)</span>
+                </button>
+
+                {/* Copy to Clipboard (Foolproof for Android APK & WebViews) */}
+                <button
+                  type="button"
+                  onClick={handleCopyBackup}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition cursor-pointer flex items-center gap-1.5 ${
+                    copiedBackup
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                  }`}
+                  title="Copy full JSON backup text to clipboard (works everywhere even if file downloads are restricted)"
+                >
+                  {copiedBackup ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Copied to Clipboard!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Copy JSON to Clipboard</span>
+                    </>
+                  )}
+                </button>
               </div>
 
-              <p className="text-[10px] text-emerald-300/80 leading-normal">
-                📱 <strong>Mobile Note:</strong> Tap <em>Save to Phone Files</em> to choose your iPhone/iPad &ldquo;Files&rdquo; app or Android &ldquo;Downloads/My Files&rdquo; folder. Both <code className="text-amber-300">.lumina</code> and <code className="text-amber-300">.json</code> can be restored on any device.
-              </p>
+              {nativeSaved && (
+                <div className="text-[11px] text-emerald-300 flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Successfully saved to system: <strong className="font-mono">{nativeSaved}</strong></span>
+                </div>
+              )}
+
+              <div className="text-[10px] text-emerald-300/90 leading-relaxed bg-slate-900/50 p-2 rounded-lg border border-emerald-500/20 space-y-1">
+                <div>
+                  📱 <strong>Android APK / Phone Tips:</strong> If your phone's browser or APK wrapper doesn't auto-save downloads, tap <em>Save to Phone Files / Share</em> to choose &ldquo;Save to device&rdquo;, &ldquo;Google Drive&rdquo;, or &ldquo;Files&rdquo;. Or click <em>Copy JSON to Clipboard</em> to safely paste your backup into any note app!
+                </div>
+                <div>
+                  💻 <strong>Desktop EXE Tips:</strong> Use <em>System Save Dialog (Save As...)</em> to pick any folder directly on your computer.
+                </div>
+              </div>
             </div>
           )}
         </div>
 
         {/* Import / Restore Section */}
         <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/70 space-y-3">
-          <div className="flex items-center gap-2">
-            <Upload className="w-4 h-4 text-sky-400" />
-            <span className="text-xs font-semibold uppercase tracking-wider text-slate-200">
-              Import & Restore from Another Device
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Upload className="w-4 h-4 text-sky-400" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-200">
+                Import & Restore Library
+              </span>
+            </div>
+
+            {/* Mode toggle: File upload vs Paste text */}
+            {!importedBackup && (
+              <div className="flex items-center p-0.5 bg-slate-900 rounded-lg border border-slate-700 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setRestoreMethod('file')}
+                  className={`px-2.5 py-1 rounded-md transition cursor-pointer font-medium ${
+                    restoreMethod === 'file' ? 'bg-amber-500 text-slate-950 font-semibold' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Pick File (.lumina / .json)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRestoreMethod('paste')}
+                  className={`px-2.5 py-1 rounded-md transition cursor-pointer font-medium ${
+                    restoreMethod === 'paste' ? 'bg-amber-500 text-slate-950 font-semibold' : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Paste Backup Text
+                </button>
+              </div>
+            )}
           </div>
 
           {!importedBackup ? (
-            <label
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition ${
-                isDraggingOver
-                  ? 'border-amber-400 bg-amber-500/10'
-                  : 'border-slate-700 hover:border-amber-500/60 bg-slate-900/40'
-              }`}
-            >
-              <FileCode className={`w-8 h-8 transition-transform ${isDraggingOver ? 'scale-110 text-amber-400' : 'text-slate-500'}`} />
-              <span className="text-xs font-medium text-slate-200 text-center">
-                Click to browse or drop your <code className="text-amber-400 font-mono">.lumina</code> backup file here
-              </span>
-              <span className="text-[10px] text-slate-400">
-                Self-contained Lumina library archive with complete binary verification
-              </span>
-              <input
-                type="file"
-                accept=".lumina,.json"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-            </label>
+            restoreMethod === 'file' ? (
+              <label
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition ${
+                  isDraggingOver
+                    ? 'border-amber-400 bg-amber-500/10'
+                    : 'border-slate-700 hover:border-amber-500/60 bg-slate-900/40'
+                }`}
+              >
+                <FileCode className={`w-8 h-8 transition-transform ${isDraggingOver ? 'scale-110 text-amber-400' : 'text-slate-500'}`} />
+                <span className="text-xs font-medium text-slate-200 text-center">
+                  Click to browse or drop your <code className="text-amber-400 font-mono">.lumina</code> or <code className="text-amber-400 font-mono">.json</code> file
+                </span>
+                <span className="text-[10px] text-slate-400 text-center">
+                  Works with archives from Desktop (.exe) or Android (.apk)
+                </span>
+                <input
+                  type="file"
+                  accept=".lumina,.json,application/json,application/octet-stream"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+              </label>
+            ) : (
+              <div className="space-y-2.5">
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Pasting backup data directly is ideal for Android APKs or phones where the file picker restricts custom file extensions.
+                </p>
+                <textarea
+                  value={pastedJson}
+                  onChange={(e) => setPastedJson(e.target.value)}
+                  placeholder="Paste your Lumina backup JSON content here (starts with { &quot;version&quot;: ...)..."
+                  className="w-full h-28 bg-slate-900/90 border border-slate-700 rounded-xl p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-amber-500 resize-none"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleVerifyPastedData}
+                    disabled={!pastedJson.trim() || isVerifyingPaste}
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+                  >
+                    <ClipboardPaste className="w-3.5 h-3.5" />
+                    <span>{isVerifyingPaste ? 'Verifying...' : 'Load Pasted Archive'}</span>
+                  </button>
+                </div>
+              </div>
+            )
           ) : (
             <div className="space-y-4 bg-slate-900/90 p-4 rounded-2xl border border-slate-700">
               {/* File details */}

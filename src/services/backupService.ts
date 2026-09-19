@@ -67,9 +67,12 @@ export interface ExportResult {
   fileName: string;
   jsonFileName: string;
   blob: Blob;
+  jsonBlob: Blob;
   jsonUrl: string;
+  dataUrl: string;
   jsonString: string;
   file: File;
+  jsonFile: File;
   stats: {
     booksCount: number;
     highlightsCount: number;
@@ -178,6 +181,16 @@ export class BackupService {
       fileObj = blob as any;
     }
 
+    let jsonFileObj: File;
+    try {
+      jsonFileObj = new File([jsonBlob], jsonFileName, { type: 'application/json' });
+    } catch {
+      jsonFileObj = jsonBlob as any;
+    }
+
+    // Prepare data URLs for Android WebViews where blob: is ignored by DownloadManager
+    const dataUrl = `data:application/json;charset=utf-8,${encodeURIComponent(jsonString)}`;
+
     // Trigger auto-download via link
     try {
       const a = document.createElement('a');
@@ -211,9 +224,12 @@ export class BackupService {
       fileName,
       jsonFileName,
       blob,
+      jsonBlob,
       jsonUrl,
+      dataUrl,
       jsonString,
       file: fileObj,
+      jsonFile: jsonFileObj,
       stats: {
         booksCount: serializedBooks.length,
         highlightsCount: highlights.length,
@@ -222,6 +238,75 @@ export class BackupService {
         fileSizeBytes: blob.size,
       },
     };
+  }
+
+  /**
+   * Native OS File System Access API (Works on Desktop .exe, Electron, Tauri, Chrome, Edge)
+   */
+  public async saveViaNativePicker(fileName: string, content: string): Promise<boolean> {
+    if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+      try {
+        const isLumina = fileName.endsWith('.lumina');
+        const handle = await (window as any).showSaveFilePicker({
+          suggestedName: fileName,
+          types: isLumina ? [
+            {
+              description: 'Lumina Library Backup (.lumina)',
+              accept: { 'application/octet-stream': ['.lumina'] },
+            },
+            {
+              description: 'JSON Backup (.json)',
+              accept: { 'application/json': ['.json'] },
+            },
+          ] : [
+            {
+              description: 'JSON Backup (.json)',
+              accept: { 'application/json': ['.json'] },
+            },
+            {
+              description: 'Lumina Library Backup (.lumina)',
+              accept: { 'application/octet-stream': ['.lumina'] },
+            },
+          ],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(content);
+        await writable.close();
+        return true;
+      } catch (err: any) {
+        if (err.name === 'AbortError') return false;
+        throw err;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Direct Clipboard Copy Fallback (Guaranteed to work on Android APK, iOS, and restricted WebViews)
+   */
+  public async copyToClipboard(text: string): Promise<boolean> {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {
+      // Fallback to execCommand
+    }
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return ok;
+    } catch {
+      return false;
+    }
   }
 
   /**
