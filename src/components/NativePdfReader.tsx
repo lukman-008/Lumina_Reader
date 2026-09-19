@@ -5,7 +5,7 @@ import { Book, ReaderSettings, Highlight } from '../types';
 import { db } from '../services/db';
 import { habitTracker } from '../services/habitTracker';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Maximize2, Minimize2, Settings, List, X, Square, Columns2, ScrollText, Moon, Sun, Palette, Eye, CloudRain, Flame, Volume2, Zap, Sliders, BookOpen, Highlighter, Sparkles, Loader2, Layers, Search, Copy, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowLeft, ZoomIn, ZoomOut, Maximize, Maximize2, Minimize2, Settings, List, X, Square, Columns2, ScrollText, Moon, Sun, Palette, Eye, CloudRain, Flame, Volume2, Zap, Sliders, BookOpen, Highlighter, Sparkles, Loader2, Layers, Search, Copy, Check, RotateCcw } from 'lucide-react';
 import { SelectionPopup } from './SelectionPopup';
 import { HighlightPopover } from './HighlightPopover';
 import { AIAssistantDrawer } from './AIAssistantDrawer';
@@ -79,11 +79,17 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState<number>(typeof window !== 'undefined' ? window.innerWidth : 800);
   const [scale, setScale] = useState<number>(1.0);
+  const [pinchTransform, setPinchTransform] = useState<{ scale: number; originX: number; originY: number } | null>(null);
+  const [isZoomMenuOpen, setIsZoomMenuOpen] = useState(false);
   
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
+  const touchStartTime = useRef<number>(0);
   const pinchStartDist = useRef<number | null>(null);
   const pinchStartScale = useRef<number>(1.0);
+  const pinchMidpoint = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const lastTapTimeRef = useRef<number>(0);
+  const lastTapPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   // Sync settings.fontSize to PDF scale (16px = 1.0x, scaling dynamically)
   const prevFontSizeRef = useRef(settings.fontSize);
@@ -127,13 +133,17 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
+    // 2-Finger Pinch Initiation
     if (e.touches.length === 2) {
       const dist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
+      const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
       pinchStartDist.current = dist;
       pinchStartScale.current = scale;
+      pinchMidpoint.current = { x: midX, y: midY };
       touchStartX.current = null;
       touchStartY.current = null;
       return;
@@ -165,24 +175,39 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     if (e.touches.length === 1) {
       touchStartX.current = e.touches[0].clientX;
       touchStartY.current = e.touches[0].clientY;
+      touchStartTime.current = Date.now();
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 2 && pinchStartDist.current !== null) {
+    if (e.touches.length === 2 && pinchStartDist.current !== null && pinchStartDist.current > 0) {
       const currentDist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
       const factor = currentDist / pinchStartDist.current;
-      const targetScale = Math.min(3.5, Math.max(0.5, pinchStartScale.current * factor));
-      setScale(parseFloat(targetScale.toFixed(2)));
+      // Ultra-smooth GPU accelerated transform without canvas re-rendering during pinch gesture!
+      setPinchTransform({
+        scale: factor,
+        originX: pinchMidpoint.current.x,
+        originY: pinchMidpoint.current.y,
+      });
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
+    // Finish pinch gesture & commit final scale
     if (pinchStartDist.current !== null && e.touches.length < 2) {
+      if (pinchTransform) {
+        const rawScale = pinchStartScale.current * pinchTransform.scale;
+        const targetScale = Math.min(3.5, Math.max(0.65, parseFloat(rawScale.toFixed(2))));
+        setScale(targetScale);
+        setPinchTransform(null);
+      }
       pinchStartDist.current = null;
+      touchStartX.current = null;
+      touchStartY.current = null;
+      return;
     }
 
     if (touchStartX.current === null || touchStartY.current === null) return;
@@ -191,6 +216,37 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     
     const deltaX = touchEndX - touchStartX.current;
     const deltaY = touchEndY - touchStartY.current;
+    const moveDist = Math.hypot(deltaX, deltaY);
+    const touchDuration = Date.now() - touchStartTime.current;
+
+    // Double-tap detection for quick zoom in / zoom reset
+    if (moveDist < 15 && touchDuration < 320) {
+      const now = Date.now();
+      const timeDiff = now - lastTapTimeRef.current;
+      const tapDist = Math.hypot(touchEndX - lastTapPosRef.current.x, touchEndY - lastTapPosRef.current.y);
+      
+      if (timeDiff < 350 && tapDist < 35) {
+        // Double-tap triggered! Toggle between 2.0x and 1.0x
+        if (scale <= 1.25) {
+          setScale(2.0);
+        } else {
+          setScale(1.0);
+        }
+        lastTapTimeRef.current = 0;
+        touchStartX.current = null;
+        touchStartY.current = null;
+        return;
+      }
+      lastTapTimeRef.current = now;
+      lastTapPosRef.current = { x: touchEndX, y: touchEndY };
+    }
+
+    // When zoomed in, 1-finger swipes should pan horizontally/vertically without turning page!
+    if (scale > 1.15) {
+      touchStartX.current = null;
+      touchStartY.current = null;
+      return;
+    }
 
     // If text is actively selected or user was selecting text, do not navigate pages
     const currentSelection = window.getSelection();
@@ -201,8 +257,8 @@ export const NativePdfReader: React.FC<NativePdfReaderProps> = ({
     }
 
     // Only register as swipe if horizontal distance is greater than vertical (allows scrolling)
-    // and distance is significant
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 40) {
+    // and distance is significant (at least 48px)
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 48) {
       if (deltaX > 0) {
         changePage(-1); // Swipe right -> previous page
       } else {
@@ -1460,7 +1516,11 @@ return (
               className={`shadow-2xl transition-all duration-300 ${themeStyle.container} ${settings.layoutMode !== 'scroll' ? 'rounded-lg ' : ''} ${pdfViewMode === 'native' ? 'block' : 'hidden'}`}
               style={{ 
                 maxWidth: pdfMaxWidth * scale,
-                width: '100%' 
+                width: '100%',
+                transform: pinchTransform ? `scale(${pinchTransform.scale})` : undefined,
+                transformOrigin: pinchTransform ? `${pinchTransform.originX}px ${pinchTransform.originY}px` : 'center center',
+                transition: pinchTransform ? 'none' : 'transform 0.15s ease-out',
+                willChange: pinchTransform ? 'transform' : 'auto',
               }}
             >
             <div style={{ filter: getPdfFilterStyle(), transition: 'filter 0.3s ease' }}>
@@ -1561,32 +1621,94 @@ return (
         )}
       </div>
 
-      {/* Floating Zoom Control pill for easy mobile touch zoom */}
-      <div className="fixed bottom-14 sm:bottom-16 right-3 sm:right-5 z-30 flex items-center gap-1 p-1 bg-slate-900/90 text-slate-200 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/80 text-xs select-none">
-        <button
-          type="button"
-          onClick={() => setScale(s => Math.max(0.5, parseFloat((s - 0.15).toFixed(2))))}
-          className="p-1.5 hover:bg-slate-800 active:scale-90 rounded-xl transition cursor-pointer text-slate-400 hover:text-white"
-          title="Zoom Out"
-        >
-          <ZoomOut className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setScale(1.0)}
-          className="px-2 py-1 hover:bg-slate-800 active:scale-95 rounded-xl transition cursor-pointer font-mono text-[11px] text-amber-400 font-semibold"
-          title="Reset Zoom to 100%"
-        >
-          {Math.round(scale * 100)}%
-        </button>
-        <button
-          type="button"
-          onClick={() => setScale(s => Math.min(3.5, parseFloat((s + 0.15).toFixed(2))))}
-          className="p-1.5 hover:bg-slate-800 active:scale-90 rounded-xl transition cursor-pointer text-slate-400 hover:text-white"
-          title="Zoom In"
-        >
-          <ZoomIn className="w-4 h-4" />
-        </button>
+      {/* Floating Zoom Control Pill with Quick Presets & Continuous Slider */}
+      <div className="fixed bottom-14 sm:bottom-16 right-3 sm:right-5 z-30 flex flex-col items-end gap-2 select-none" data-no-swipe="true">
+        {isZoomMenuOpen && (
+          <div className="p-3 bg-slate-900/95 text-slate-100 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/80 text-xs w-64 space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-150">
+            <div className="flex items-center justify-between font-medium">
+              <span className="text-slate-300 font-sans">Zoom & Fit</span>
+              <span className="font-mono text-amber-400 font-bold">{Math.round(scale * 100)}%</span>
+            </div>
+
+            {/* Quick Presets */}
+            <div className="grid grid-cols-4 gap-1.5">
+              {[
+                { label: 'Fit', val: 1.0 },
+                { label: '125%', val: 1.25 },
+                { label: '150%', val: 1.5 },
+                { label: '200%', val: 2.0 },
+              ].map(preset => (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => { setScale(preset.val); setIsZoomMenuOpen(false); }}
+                  className={`py-1 rounded-lg text-[11px] font-medium border transition cursor-pointer ${
+                    Math.abs(scale - preset.val) < 0.05
+                      ? 'bg-amber-500 text-slate-950 border-amber-500 font-bold'
+                      : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Continuous Smooth Slider */}
+            <div>
+              <input
+                type="range"
+                min="0.65"
+                max="3.0"
+                step="0.05"
+                value={scale}
+                onChange={(e) => setScale(parseFloat(e.target.value))}
+                className="w-full accent-amber-500 cursor-pointer"
+              />
+              <div className="flex justify-between text-[10px] text-slate-400 mt-1 font-mono">
+                <span>65%</span>
+                <span className="font-sans text-slate-400/80">Double-tap page for 2x</span>
+                <span>300%</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-1 p-1 bg-slate-900/90 text-slate-200 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-700/80 text-xs">
+          <button
+            type="button"
+            onClick={() => setScale(s => Math.max(0.65, parseFloat((s - 0.2).toFixed(2))))}
+            className="p-1.5 hover:bg-slate-800 active:scale-90 rounded-xl transition cursor-pointer text-slate-400 hover:text-white"
+            title="Zoom Out (-20%)"
+          >
+            <ZoomOut className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsZoomMenuOpen(prev => !prev)}
+            onDoubleClick={() => setScale(s => s > 1.25 ? 1.0 : 2.0)}
+            className="px-2.5 py-1 hover:bg-slate-800 active:scale-95 rounded-xl transition cursor-pointer font-mono text-[11px] text-amber-400 font-bold flex items-center gap-1"
+            title="Click for Zoom Presets & Slider, Double-click to toggle 100%/200%"
+          >
+            <span>{Math.round(scale * 100)}%</span>
+            <Sliders className="w-3 h-3 opacity-60" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setScale(s => Math.min(3.5, parseFloat((s + 0.2).toFixed(2))))}
+            className="p-1.5 hover:bg-slate-800 active:scale-90 rounded-xl transition cursor-pointer text-slate-400 hover:text-white"
+            title="Zoom In (+20%)"
+          >
+            <ZoomIn className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setScale(1.0)}
+            className="p-1.5 hover:bg-slate-800 active:scale-90 rounded-xl transition cursor-pointer text-slate-400 hover:text-white border-l border-slate-800 ml-0.5"
+            title="Reset to Fit Width (100%)"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
 

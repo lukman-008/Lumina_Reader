@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { db, loadSavedSettings, saveReaderSettings } from './services/db';
 import { initializeDatabaseWithSeed } from './services/bookParser';
 import type { Book, Shelf, ReaderSettings } from './types';
@@ -80,6 +80,16 @@ export default function App() {
 
       const loadedShelves = await db.shelves.toArray();
       setShelves(loadedShelves);
+
+      // Check if hash points to a specific book
+      if (window.location.hash.startsWith('#reader-')) {
+        const hashBookId = window.location.hash.replace('#reader-', '');
+        const matched = initialBooks.find((b) => b.id === hashBookId);
+        if (matched) {
+          setSelectedBook(matched);
+          window.history.replaceState({ view: 'reader', bookId: matched.id }, '', `#reader-${matched.id}`);
+        }
+      }
     };
 
     initApp();
@@ -94,6 +104,54 @@ export default function App() {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
+  }, []);
+
+  // Browser History & System / Phone Back Button Handler
+  const selectedBookRef = useRef<Book | null>(null);
+  selectedBookRef.current = selectedBook;
+  const booksRef = useRef<Book[]>([]);
+  booksRef.current = books;
+
+  useEffect(() => {
+    if (!window.history.state || !window.history.state.view) {
+      window.history.replaceState({ view: 'library' }, '', window.location.pathname + window.location.search);
+    }
+
+    const handlePopState = (e: PopStateEvent) => {
+      const state = e.state;
+      if (!state || state.view === 'library') {
+        // Hardware or gesture back button pressed while reading -> Return to library, don't exit app!
+        if (selectedBookRef.current) {
+          setSelectedBook(null);
+          setIsZenMode(false);
+          refreshBooks(true);
+        }
+      } else if (state.view === 'reader' && state.bookId) {
+        const found = booksRef.current.find((b) => b.id === state.bookId);
+        if (found) {
+          setSelectedBook(found);
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const handleSelectBook = useCallback((book: Book) => {
+    setSelectedBook(book);
+    // Push reader history state so phone's back button / gesture navigates back to library!
+    window.history.pushState({ view: 'reader', bookId: book.id }, '', `#reader-${book.id}`);
+  }, []);
+
+  const handleReturnToLibrary = useCallback(() => {
+    if (window.history.state?.view === 'reader') {
+      window.history.back();
+    } else {
+      setSelectedBook(null);
+      setIsZenMode(false);
+      refreshBooks(true);
+    }
   }, []);
 
   const refreshBooks = async (forceClearSelection = false) => {
@@ -251,22 +309,14 @@ const handleNavigateToResult = useCallback(
         onOpenSearchIndex={() => setIsSearchIndexOpen(true)}
         onOpenAnnotationManager={() => setIsAnnotationManagerOpen(true)}
         isOnline={isOnline}
-        onNavigateHome={() => {
-          setSelectedBook(null);
-          setIsZenMode(false);
-          refreshBooks(true);
-        }}
+        onNavigateHome={handleReturnToLibrary}
       />
 
       {/* Main View: Library or Reader */}
       {selectedBook ? (
         <ReaderView
           book={selectedBook}
-          onBackToLibrary={() => {
-            setSelectedBook(null);
-            setIsZenMode(false);
-            refreshBooks(true);
-          }}
+          onBackToLibrary={handleReturnToLibrary}
           settings={settings}
           onUpdateSettings={handleUpdateSettings}
           isZenMode={isZenMode}
@@ -277,7 +327,7 @@ const handleNavigateToResult = useCallback(
       ) : (
         <LibraryView
           books={books}
-          onSelectBook={(book) => setSelectedBook(book)}
+          onSelectBook={handleSelectBook}
           onRefreshBooks={refreshBooks}
           onOpenExportGuide={() => setIsExportGuideOpen(true)}
           settings={settings}

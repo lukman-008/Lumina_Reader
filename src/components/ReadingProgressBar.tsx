@@ -271,8 +271,31 @@ export const ReadingProgressBar: React.FC<ReadingProgressBarProps> = ({
         </div>
       </div>
 
-      {/* Right: Quick Bookmark Ribbon & Step Controls */}
+      {/* Right: Quick Bookmark Ribbon, Font Zoom & Step Controls */}
       <div className="flex items-center gap-1 shrink-0">
+        {/* Quick Font Size Zoom Adjuster */}
+        <div className="flex items-center bg-current/5 rounded-lg p-0.5 border border-current/10" data-no-swipe="true">
+          <button
+            type="button"
+            onClick={() => onUpdateSettings({ fontSize: Math.max(12, (settings.fontSize || 18) - 1) })}
+            className="px-1.5 py-0.5 text-[11px] font-semibold hover:bg-current/10 rounded transition cursor-pointer opacity-80 hover:opacity-100"
+            title="Decrease font size (Zoom Out)"
+          >
+            A-
+          </button>
+          <span className="text-[10px] font-mono px-1 opacity-70">
+            {settings.fontSize || 18}
+          </span>
+          <button
+            type="button"
+            onClick={() => onUpdateSettings({ fontSize: Math.min(36, (settings.fontSize || 18) + 1) })}
+            className="px-1.5 py-0.5 text-[11px] font-semibold hover:bg-current/10 rounded transition cursor-pointer opacity-80 hover:opacity-100"
+            title="Increase font size (Zoom In)"
+          >
+            A+
+          </button>
+        </div>
+
         <button
           onClick={onToggleBookmark}
           className={`p-1.5 rounded-lg hover:bg-current/10 transition cursor-pointer ${

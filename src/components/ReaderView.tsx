@@ -191,8 +191,26 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
   const contentAreaRef = useRef<HTMLDivElement>(null);
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
+  const touchStartTime = useRef<number>(0);
+  const pinchStartDist = useRef<number | null>(null);
+  const pinchStartFontSize = useRef<number>(18);
+  const lastTapTimeRef = useRef<number>(0);
+  const lastTapPosRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
 
   const handleSwipeStart = (e: React.TouchEvent) => {
+    // 2-finger pinch for live font zooming
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      pinchStartDist.current = dist;
+      pinchStartFontSize.current = settings.fontSize || 18;
+      touchStartX.current = null;
+      touchStartY.current = null;
+      return;
+    }
+
     // Never trigger page-turn swipes if touch started on navigation bar, toolbars, buttons, sliders, or drawers
     const target = e.target as HTMLElement | null;
     if (target) {
@@ -217,17 +235,63 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       }
     }
 
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
+    if (e.touches.length === 1) {
+      touchStartX.current = e.touches[0].clientX;
+      touchStartY.current = e.touches[0].clientY;
+      touchStartTime.current = Date.now();
+    }
+  };
+
+  const handleSwipeMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchStartDist.current !== null && pinchStartDist.current > 0) {
+      const currentDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const factor = currentDist / pinchStartDist.current;
+      const targetFontSize = Math.min(36, Math.max(12, Math.round(pinchStartFontSize.current * factor)));
+      if (targetFontSize !== settings.fontSize) {
+        onUpdateSettings({ fontSize: targetFontSize });
+      }
+    }
   };
 
   const handleSwipeEnd = (e: React.TouchEvent) => {
+    if (pinchStartDist.current !== null && e.touches.length < 2) {
+      pinchStartDist.current = null;
+      touchStartX.current = null;
+      touchStartY.current = null;
+      return;
+    }
+
     if (touchStartX.current === null || touchStartY.current === null) return;
-    const touchEndX = e.changedTouches[0].clientX;
-    const touchEndY = e.changedTouches[0].clientY;
+    const touchEndX = e.changedTouches[0]?.clientX ?? touchStartX.current;
+    const touchEndY = e.changedTouches[0]?.clientY ?? touchStartY.current;
     
     const deltaX = touchEndX - touchStartX.current;
     const deltaY = touchEndY - touchStartY.current;
+    const moveDist = Math.hypot(deltaX, deltaY);
+    const touchDuration = Date.now() - touchStartTime.current;
+
+    // Double-tap detection for quick font zoom
+    if (moveDist < 15 && touchDuration < 320) {
+      const now = Date.now();
+      const timeDiff = now - lastTapTimeRef.current;
+      const tapDist = Math.hypot(touchEndX - lastTapPosRef.current.x, touchEndY - lastTapPosRef.current.y);
+      if (timeDiff < 350 && tapDist < 35) {
+        if ((settings.fontSize || 18) <= 19) {
+          onUpdateSettings({ fontSize: 24 });
+        } else {
+          onUpdateSettings({ fontSize: 18 });
+        }
+        lastTapTimeRef.current = 0;
+        touchStartX.current = null;
+        touchStartY.current = null;
+        return;
+      }
+      lastTapTimeRef.current = now;
+      lastTapPosRef.current = { x: touchEndX, y: touchEndY };
+    }
 
     // If text is actively selected or user was selecting text, do not navigate pages
     const currentSelection = window.getSelection();
@@ -238,8 +302,8 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
     }
 
     // Only register as swipe if horizontal distance is greater than vertical (allows vertical scroll to work)
-    // and distance is significant (at least 40px)
-    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 40) {
+    // and distance is significant (at least 48px)
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 48) {
       if (deltaX > 0) {
         handlePrevPage(); // Swipe right -> previous page
       } else {
@@ -1031,6 +1095,7 @@ export const ReaderView: React.FC<ReaderViewProps> = (props) => {
       ref={containerRef}
       onMouseMove={handleMouseMove}
       onTouchStart={handleSwipeStart}
+      onTouchMove={handleSwipeMove}
       onTouchEnd={handleSwipeEnd}
       
       className={`${
